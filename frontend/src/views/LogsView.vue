@@ -501,404 +501,410 @@
                       {{ t("logs.detail.noDetail") }}
                     </div>
                     <div v-else class="custom-steps">
-                      <div
-                        v-for="(s, sIdx) in customDetail"
-                        :key="sIdx"
-                        class="custom-step"
-                        :class="
-                          s.error && !retriedStepNums.has(s.step)
-                            ? 'custom-step-error'
-                            : ''
-                        "
-                      >
-                        <div class="custom-step-header">
-                          <span class="custom-step-num">{{ s.step }}</span>
-                          <span class="custom-step-label">{{
-                            s.label || s.actionType
-                          }}</span>
-                          <span
-                            v-if="s.durationMs != null"
-                            class="custom-step-duration"
-                            >{{ s.durationMs }}ms</span
-                          >
-                          <span
-                            v-if="s.error && retriedStepNums.has(s.step)"
-                            class="badge badge-orange"
-                            style="font-size: 10px"
-                            >retried</span
-                          >
-                          <span
-                            v-else-if="s.error"
-                            class="badge badge-red"
-                            style="font-size: 10px"
-                            >failed</span
-                          >
-                          <span
-                            v-else-if="s.result"
-                            class="badge badge-green"
-                            style="font-size: 10px"
-                            >ok</span
-                          >
-                        </div>
-                        <!-- Pre-click context: bot message received while waiting for buttons -->
+                      <template v-for="(s, sIdx) in customDetail" :key="sIdx">
                         <div
-                          v-if="
-                            s.preClickHtml ||
-                            s.preClickImage ||
-                            s.preClickHasMedia ||
-                            s.preClickButtons?.length
-                          "
-                          class="chat-bg"
-                          style="margin-top: 6px"
+                          v-if="startsCleanupGroup(sIdx)"
+                          class="custom-cleanup-divider"
                         >
-                          <div class="chat-log">
-                            <div class="chat-row-recv">
-                              <div>
-                                <div class="tg-bubble">
-                                  <img
-                                    v-if="s.preClickImage"
-                                    :src="s.preClickImage"
-                                    class="tg-bubble-img"
-                                    alt=""
-                                  />
-                                  <div
-                                    v-else-if="s.preClickHasMedia"
-                                    class="tg-bubble-img-placeholder"
-                                  >
-                                    📷
+                          {{ t("logs.detail.cleanupGroup") }}
+                        </div>
+                        <div
+                          class="custom-step"
+                          :class="
+                            s.error && !isRetried(s)
+                              ? 'custom-step-error'
+                              : ''
+                          "
+                        >
+                          <div class="custom-step-header">
+                            <span class="custom-step-num">{{ s.step }}</span>
+                            <span class="custom-step-label">{{
+                              s.label || s.actionType
+                            }}</span>
+                            <span
+                              v-if="s.durationMs != null"
+                              class="custom-step-duration"
+                              >{{ s.durationMs }}ms</span
+                            >
+                            <span
+                              v-if="s.error && isRetried(s)"
+                              class="badge badge-orange"
+                              style="font-size: 10px"
+                              >retried</span
+                            >
+                            <span
+                              v-else-if="s.error"
+                              class="badge badge-red"
+                              style="font-size: 10px"
+                              >failed</span
+                            >
+                            <span
+                              v-else-if="s.result"
+                              class="badge badge-green"
+                              style="font-size: 10px"
+                              >ok</span
+                            >
+                          </div>
+                          <!-- Pre-click context: bot message received while waiting for buttons -->
+                          <div
+                            v-if="
+                              s.preClickHtml ||
+                              s.preClickImage ||
+                              s.preClickHasMedia ||
+                              s.preClickButtons?.length
+                            "
+                            class="chat-bg"
+                            style="margin-top: 6px"
+                          >
+                            <div class="chat-log">
+                              <div class="chat-row-recv">
+                                <div>
+                                  <div class="tg-bubble">
+                                    <img
+                                      v-if="s.preClickImage"
+                                      :src="s.preClickImage"
+                                      class="tg-bubble-img"
+                                      alt=""
+                                    />
+                                    <div
+                                      v-else-if="s.preClickHasMedia"
+                                      class="tg-bubble-img-placeholder"
+                                    >
+                                      📷
+                                    </div>
+                                    <div
+                                      v-if="s.preClickHtml"
+                                      class="tg-bubble-text"
+                                      v-html="s.preClickHtml"
+                                    />
                                   </div>
                                   <div
-                                    v-if="s.preClickHtml"
-                                    class="tg-bubble-text"
-                                    v-html="s.preClickHtml"
-                                  />
-                                </div>
-                                <div
-                                  v-if="s.preClickButtons?.length"
-                                  class="tg-keyboard"
-                                >
-                                  <div
-                                    v-for="(row, ri) in s.preClickButtons"
-                                    :key="ri"
-                                    class="tg-keyboard-row"
+                                    v-if="s.preClickButtons?.length"
+                                    class="tg-keyboard"
                                   >
                                     <div
-                                      v-for="btn in row"
-                                      :key="btn"
-                                      :class="
-                                        btn === s.clickedButton
-                                          ? 'tg-btn tg-btn-active'
-                                          : 'tg-btn'
-                                      "
+                                      v-for="(row, ri) in s.preClickButtons"
+                                      :key="ri"
+                                      class="tg-keyboard-row"
                                     >
-                                      {{ btn }}
+                                      <div
+                                        v-for="btn in row"
+                                        :key="btn"
+                                        :class="
+                                          btn === s.clickedButton
+                                            ? 'tg-btn tg-btn-active'
+                                            : 'tg-btn'
+                                        "
+                                      >
+                                        {{ btn }}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                        <div
-                          v-if="
-                            showDevLogs &&
-                            (s.msgCount != null ||
-                              s.responseSource ||
-                              s.retryCount != null ||
-                              s.errorName)
-                          "
-                          class="dev-step-meta"
-                        >
-                          <span v-if="s.msgCount != null"
-                            >{{ t("logs.dev.msgCount") }}:
-                            {{ s.msgCount }}</span
-                          >
-                          <span v-if="s.responseSource"
-                            >{{ t("logs.dev.responseSource") }}:
-                            {{ s.responseSource }}</span
-                          >
-                          <span v-if="s.retryCount != null"
-                            >{{ t("logs.dev.retryCount") }}:
-                            {{ s.retryCount }}</span
-                          >
-                          <span v-if="s.errorName"
-                            >{{ t("logs.dev.errorName") }}:
-                            {{ s.errorName }}</span
-                          >
-                        </div>
-                        <div
-                          v-if="s.callbackAnswer"
-                          class="custom-step-callback"
-                        >
-                          {{ s.callbackAnswer }}
-                        </div>
-                        <!-- Browser (Cloudflare / Mini App) outcome: the page the
-                             browser ended up on is otherwise invisible from here -->
-                        <div v-if="s.cfHost" class="dev-step-meta">
-                          <span>{{ t("logs.cf.host") }}: {{ s.cfHost }}</span>
-                          <span v-if="s.cfProxy"
-                            >{{ t("logs.cf.proxy") }}: {{ s.cfProxy
-                            }}{{
-                              s.cfAttempts && s.cfAttempts > 1
-                                ? ` (${s.cfAttempts})`
-                                : ""
-                            }}</span
-                          >
-                          <span
-                            >{{ t("logs.cf.challenge") }}:
-                            {{
-                              s.cfChallenged
-                                ? s.cfPassed
-                                  ? t("logs.cf.passed")
-                                  : t("logs.cf.refused")
-                                : t("logs.cf.none")
-                            }}</span
-                          >
-                          <!-- Which build ran. The free one is older and passes fewer
-                               challenges, so a step that fell back to it is called out -->
-                          <span
-                            v-if="s.cfBuild"
-                            :style="s.cfBuild === 'free' ? 'color:#c47f17' : undefined"
-                            :title="s.cfBuild === 'free' ? t('logs.cf.buildFreeHint') : ''"
-                            >{{ t("logs.cf.build") }}:
-                            {{
-                              s.cfBuild === "keyed"
-                                ? t("logs.cf.buildKeyed")
-                                : t("logs.cf.buildFree")
-                            }}</span
-                          >
-                          <span v-if="s.cfMiniApp"
-                            >{{ t("logs.cf.signed") }}:
-                            {{ s.cfMiniAppSigned ? "✓" : "✗" }}</span
-                          >
-                          <span v-if="s.cfMiniAppAction"
-                            >{{ t("logs.cf.inApp") }}:
-                            {{ s.cfMiniAppAction }}</span
-                          >
-                          <span v-if="s.cfPageTitle"
-                            >{{ t("logs.cf.pageTitle") }}:
-                            {{ s.cfPageTitle }}</span
-                          >
-                          <span v-if="s.cfNavError" style="color: #e63946"
-                            >{{ t("logs.cf.navError") }}:
-                            {{ s.cfNavError }}</span
-                          >
-                        </div>
-                        <div
-                          v-if="showDevLogs && s.cfTrace?.length"
-                          class="dev-block"
-                          style="margin-top: 4px"
-                        >
-                          <div class="dev-block-label">
-                            {{ t("logs.cf.trace") }}
-                          </div>
-                          <pre class="dev-block-pre">{{
-                            s.cfTrace.join("\n")
-                          }}</pre>
-                        </div>
-                        <!-- open_url: one card per sub-step, with the page after it ran -->
-                        <div
-                          v-if="s.webSteps?.length"
-                          class="dev-block"
-                          style="margin-top: 4px"
-                        >
-                          <div class="dev-block-label">
-                            {{ t("logs.web.steps") }}
                           </div>
                           <div
-                            v-for="(w, wi) in s.webSteps"
-                            :key="wi"
-                            class="web-shot"
+                            v-if="
+                              showDevLogs &&
+                              (s.msgCount != null ||
+                                s.responseSource ||
+                                s.retryCount != null ||
+                                s.errorName)
+                            "
+                            class="dev-step-meta"
                           >
-                            <div class="web-shot-head">
-                              <span class="web-shot-num">{{ wi + 1 }}</span>
-                              <span class="web-shot-type">{{
-                                t("jobs.web.type." + w.type)
-                              }}</span>
-                              <span
-                                v-if="w.error"
-                                style="color: #e63946"
-                                >{{ w.error }}</span
-                              >
-                              <span v-else style="color: #2e9e5b">{{
-                                w.outcome ?? w.label
-                              }}</span>
-                            </div>
-                            <a
-                              v-if="w.screenshot"
-                              :href="w.screenshot"
-                              target="_blank"
+                            <span v-if="s.msgCount != null"
+                              >{{ t("logs.dev.msgCount") }}:
+                              {{ s.msgCount }}</span
                             >
+                            <span v-if="s.responseSource"
+                              >{{ t("logs.dev.responseSource") }}:
+                              {{ s.responseSource }}</span
+                            >
+                            <span v-if="s.retryCount != null"
+                              >{{ t("logs.dev.retryCount") }}:
+                              {{ s.retryCount }}</span
+                            >
+                            <span v-if="s.errorName"
+                              >{{ t("logs.dev.errorName") }}:
+                              {{ s.errorName }}</span
+                            >
+                          </div>
+                          <div
+                            v-if="s.callbackAnswer"
+                            class="custom-step-callback"
+                          >
+                            {{ s.callbackAnswer }}
+                          </div>
+                          <!-- Browser (Cloudflare / Mini App) outcome: the page the
+                               browser ended up on is otherwise invisible from here -->
+                          <div v-if="s.cfHost" class="dev-step-meta">
+                            <span>{{ t("logs.cf.host") }}: {{ s.cfHost }}</span>
+                            <span v-if="s.cfProxy"
+                              >{{ t("logs.cf.proxy") }}: {{ s.cfProxy
+                              }}{{
+                                s.cfAttempts && s.cfAttempts > 1
+                                  ? ` (${s.cfAttempts})`
+                                  : ""
+                              }}</span
+                            >
+                            <span
+                              >{{ t("logs.cf.challenge") }}:
+                              {{
+                                s.cfChallenged
+                                  ? s.cfPassed
+                                    ? t("logs.cf.passed")
+                                    : t("logs.cf.refused")
+                                  : t("logs.cf.none")
+                              }}</span
+                            >
+                            <!-- Which build ran. The free one is older and passes fewer
+                                 challenges, so a step that fell back to it is called out -->
+                            <span
+                              v-if="s.cfBuild"
+                              :style="s.cfBuild === 'free' ? 'color:#c47f17' : undefined"
+                              :title="s.cfBuild === 'free' ? t('logs.cf.buildFreeHint') : ''"
+                              >{{ t("logs.cf.build") }}:
+                              {{
+                                s.cfBuild === "keyed"
+                                  ? t("logs.cf.buildKeyed")
+                                  : t("logs.cf.buildFree")
+                              }}</span
+                            >
+                            <span v-if="s.cfMiniApp"
+                              >{{ t("logs.cf.signed") }}:
+                              {{ s.cfMiniAppSigned ? "✓" : "✗" }}</span
+                            >
+                            <span v-if="s.cfMiniAppAction"
+                              >{{ t("logs.cf.inApp") }}:
+                              {{ s.cfMiniAppAction }}</span
+                            >
+                            <span v-if="s.cfPageTitle"
+                              >{{ t("logs.cf.pageTitle") }}:
+                              {{ s.cfPageTitle }}</span
+                            >
+                            <span v-if="s.cfNavError" style="color: #e63946"
+                              >{{ t("logs.cf.navError") }}:
+                              {{ s.cfNavError }}</span
+                            >
+                          </div>
+                          <div
+                            v-if="showDevLogs && s.cfTrace?.length"
+                            class="dev-block"
+                            style="margin-top: 4px"
+                          >
+                            <div class="dev-block-label">
+                              {{ t("logs.cf.trace") }}
+                            </div>
+                            <pre class="dev-block-pre">{{
+                              s.cfTrace.join("\n")
+                            }}</pre>
+                          </div>
+                          <!-- open_url: one card per sub-step, with the page after it ran -->
+                          <div
+                            v-if="s.webSteps?.length"
+                            class="dev-block"
+                            style="margin-top: 4px"
+                          >
+                            <div class="dev-block-label">
+                              {{ t("logs.web.steps") }}
+                            </div>
+                            <div
+                              v-for="(w, wi) in s.webSteps"
+                              :key="wi"
+                              class="web-shot"
+                            >
+                              <div class="web-shot-head">
+                                <span class="web-shot-num">{{ wi + 1 }}</span>
+                                <span class="web-shot-type">{{
+                                  t("jobs.web.type." + w.type)
+                                }}</span>
+                                <span
+                                  v-if="w.error"
+                                  style="color: #e63946"
+                                  >{{ w.error }}</span
+                                >
+                                <span v-else style="color: #2e9e5b">{{
+                                  w.outcome ?? w.label
+                                }}</span>
+                              </div>
+                              <a
+                                v-if="w.screenshot"
+                                :href="w.screenshot"
+                                target="_blank"
+                              >
+                                <img
+                                  :src="w.screenshot"
+                                  class="dev-block-img"
+                                  alt="page after step"
+                                />
+                              </a>
+                              <div
+                                v-if="showDevLogs && (w.aiPrompt || w.aiResponse)"
+                                style="margin-top: 4px"
+                              >
+                                <pre class="dev-block-pre">{{
+                                  [w.aiPrompt, w.aiResponse]
+                                    .filter(Boolean)
+                                    .join("\n\n--- reply ---\n")
+                                }}</pre>
+                              </div>
+                            </div>
+                          </div>
+                          <div
+                            v-if="s.cfScreenshot"
+                            class="dev-block"
+                            style="margin-top: 4px"
+                          >
+                            <div class="dev-block-label">
+                              {{ t("logs.cf.screenshot") }}
+                            </div>
+                            <a :href="s.cfScreenshot" target="_blank">
                               <img
-                                :src="w.screenshot"
+                                :src="s.cfScreenshot"
                                 class="dev-block-img"
-                                alt="page after step"
+                                alt="browser page"
                               />
                             </a>
-                            <div
-                              v-if="showDevLogs && (w.aiPrompt || w.aiResponse)"
-                              style="margin-top: 4px"
-                            >
-                              <pre class="dev-block-pre">{{
-                                [w.aiPrompt, w.aiResponse]
-                                  .filter(Boolean)
-                                  .join("\n\n--- reply ---\n")
-                              }}</pre>
-                            </div>
                           </div>
-                        </div>
-                        <div
-                          v-if="s.cfScreenshot"
-                          class="dev-block"
-                          style="margin-top: 4px"
-                        >
-                          <div class="dev-block-label">
-                            {{ t("logs.cf.screenshot") }}
-                          </div>
-                          <a :href="s.cfScreenshot" target="_blank">
-                            <img
-                              :src="s.cfScreenshot"
-                              class="dev-block-img"
-                              alt="browser page"
-                            />
-                          </a>
-                        </div>
-                        <!-- Response after the action -->
-                        <div
-                          v-if="
-                            s.responseHtml ||
-                            s.responseImage ||
-                            s.responseHasMedia ||
-                            s.responseButtons?.length
-                          "
-                          class="chat-bg"
-                          style="margin-top: 6px"
-                        >
-                          <div class="chat-log">
-                            <div class="chat-row-recv">
-                              <div>
-                                <div class="tg-bubble">
-                                  <img
-                                    v-if="s.responseImage"
-                                    :src="s.responseImage"
-                                    class="tg-bubble-img"
-                                    alt=""
-                                  />
-                                  <div
-                                    v-else-if="s.responseHasMedia"
-                                    class="tg-bubble-img-placeholder"
-                                  >
-                                    📷
+                          <!-- Response after the action -->
+                          <div
+                            v-if="
+                              s.responseHtml ||
+                              s.responseImage ||
+                              s.responseHasMedia ||
+                              s.responseButtons?.length
+                            "
+                            class="chat-bg"
+                            style="margin-top: 6px"
+                          >
+                            <div class="chat-log">
+                              <div class="chat-row-recv">
+                                <div>
+                                  <div class="tg-bubble">
+                                    <img
+                                      v-if="s.responseImage"
+                                      :src="s.responseImage"
+                                      class="tg-bubble-img"
+                                      alt=""
+                                    />
+                                    <div
+                                      v-else-if="s.responseHasMedia"
+                                      class="tg-bubble-img-placeholder"
+                                    >
+                                      📷
+                                    </div>
+                                    <div
+                                      v-if="s.responseHtml"
+                                      class="tg-bubble-text"
+                                      v-html="s.responseHtml"
+                                    />
                                   </div>
                                   <div
-                                    v-if="s.responseHtml"
-                                    class="tg-bubble-text"
-                                    v-html="s.responseHtml"
-                                  />
-                                </div>
-                                <div
-                                  v-if="s.responseButtons?.length"
-                                  class="tg-keyboard"
-                                >
-                                  <div
-                                    v-for="(row, ri) in s.responseButtons"
-                                    :key="ri"
-                                    class="tg-keyboard-row"
+                                    v-if="s.responseButtons?.length"
+                                    class="tg-keyboard"
                                   >
                                     <div
-                                      v-for="btn in row"
-                                      :key="btn"
-                                      class="tg-btn"
+                                      v-for="(row, ri) in s.responseButtons"
+                                      :key="ri"
+                                      class="tg-keyboard-row"
                                     >
-                                      {{ btn }}
+                                      <div
+                                        v-for="btn in row"
+                                        :key="btn"
+                                        class="tg-btn"
+                                      >
+                                        {{ btn }}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                        <div
-                          v-if="s.error"
-                          class="chat-error"
-                          style="margin-top: 4px"
-                        >
-                          {{ s.error }}
-                        </div>
-                        <template v-if="s.aiPrompt != null">
-                          <template v-if="debugKey !== `${expandedId}-${sIdx}`">
-                            <div class="dev-block" style="margin-top: 8px">
-                              <div
-                                class="dev-block-label"
-                                style="
-                                  display: flex;
-                                  align-items: center;
-                                  justify-content: space-between;
-                                "
-                              >
-                                <span>{{ t("logs.aiPrompt") }}</span>
-                                <button
-                                  class="btn btn-ghost btn-sm btn-icon debug-open-btn"
-                                  :title="t('logs.debug.open')"
-                                  @click="openDebug(s, sIdx)"
+                          <div
+                            v-if="s.error"
+                            class="chat-error"
+                            style="margin-top: 4px"
+                          >
+                            {{ s.error }}
+                          </div>
+                          <template v-if="s.aiPrompt != null">
+                            <template v-if="debugKey !== `${expandedId}-${sIdx}`">
+                              <div class="dev-block" style="margin-top: 8px">
+                                <div
+                                  class="dev-block-label"
+                                  style="
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: space-between;
+                                  "
                                 >
-                                  <i class="fa-solid fa-flask"></i>
-                                </button>
+                                  <span>{{ t("logs.aiPrompt") }}</span>
+                                  <button
+                                    class="btn btn-ghost btn-sm btn-icon debug-open-btn"
+                                    :title="t('logs.debug.open')"
+                                    @click="openDebug(s, sIdx)"
+                                  >
+                                    <i class="fa-solid fa-flask"></i>
+                                  </button>
+                                </div>
+                                <img
+                                  v-if="s.preClickImage"
+                                  :src="s.preClickImage"
+                                  class="dev-block-img"
+                                  alt="image sent to AI"
+                                />
+                                <pre class="dev-block-pre">{{ s.aiPrompt }}</pre>
                               </div>
-                              <img
-                                v-if="s.preClickImage"
-                                :src="s.preClickImage"
-                                class="dev-block-img"
-                                alt="image sent to AI"
-                              />
-                              <pre class="dev-block-pre">{{ s.aiPrompt }}</pre>
-                            </div>
-                            <div class="dev-block" style="margin-top: 4px">
-                              <div class="dev-block-label">
-                                {{ t("logs.aiResponse")
-                                }}{{
-                                  s.aiDurationMs != null
-                                    ? ` (${(s.aiDurationMs / 1000).toFixed(1)}s)`
-                                    : ""
-                                }}
+                              <div class="dev-block" style="margin-top: 4px">
+                                <div class="dev-block-label">
+                                  {{ t("logs.aiResponse")
+                                  }}{{
+                                    s.aiDurationMs != null
+                                      ? ` (${(s.aiDurationMs / 1000).toFixed(1)}s)`
+                                      : ""
+                                  }}
+                                </div>
+                                <pre class="dev-block-pre">{{
+                                  s.aiResponse
+                                }}</pre>
                               </div>
-                              <pre class="dev-block-pre">{{
-                                s.aiResponse
-                              }}</pre>
-                            </div>
-                            <div
-                              v-if="s.aiRetries?.length"
-                              class="dev-block"
-                              style="margin-top: 4px"
-                            >
-                              <div class="dev-block-label">
-                                {{ t("logs.aiRetries") }} ({{
-                                  s.aiRetries.length
-                                }})
+                              <div
+                                v-if="s.aiRetries?.length"
+                                class="dev-block"
+                                style="margin-top: 4px"
+                              >
+                                <div class="dev-block-label">
+                                  {{ t("logs.aiRetries") }} ({{
+                                    s.aiRetries.length
+                                  }})
+                                </div>
+                                <pre class="dev-block-pre">{{
+                                  s.aiRetries
+                                    .map((r, i) => `#${i + 1}: ${r}`)
+                                    .join("\n")
+                                }}</pre>
                               </div>
-                              <pre class="dev-block-pre">{{
-                                s.aiRetries
-                                  .map((r, i) => `#${i + 1}: ${r}`)
-                                  .join("\n")
-                              }}</pre>
-                            </div>
+                            </template>
+                            <DebugPanel
+                              v-else
+                              v-model:prompt="debugPrompt"
+                              v-model:model="debugModel"
+                              v-model:max-tokens="debugMaxTokens"
+                              :images="debugImages"
+                              :suppliers="debugSuppliers"
+                              :running="debugRunning"
+                              :response="debugResponse"
+                              :error="debugError"
+                              :duration-ms="debugDurationMs"
+                              @run="runDebug"
+                              @close="debugKey = null"
+                            />
                           </template>
-                          <DebugPanel
-                            v-else
-                            v-model:prompt="debugPrompt"
-                            v-model:model="debugModel"
-                            v-model:max-tokens="debugMaxTokens"
-                            :images="debugImages"
-                            :suppliers="debugSuppliers"
-                            :running="debugRunning"
-                            :response="debugResponse"
-                            :error="debugError"
-                            :duration-ms="debugDurationMs"
-                            @run="runDebug"
-                            @close="debugKey = null"
-                          />
-                        </template>
-                      </div>
+                        </div>
+                      </template>
                     </div>
                   </div>
                 </td>
@@ -1273,15 +1279,31 @@ const customDetail = computed(() => {
   return null;
 });
 
-// Step numbers that had at least one failure followed by a success (action-level retries)
-const retriedStepNums = computed(() => {
+// The chain and the cleanup each number their steps from 1, so a step is only identified by the
+// number together with the group it came from.
+const stepKey = (s: CustomStepLog) => `${s.phase ?? "chain"}:${s.step}`;
+
+// Steps that had at least one failure followed by a success (action-level retries)
+const retriedStepKeys = computed(() => {
   const steps = customDetail.value;
-  if (!steps) return new Set<number>();
-  const succeeded = new Set(steps.filter((s) => !s.error).map((s) => s.step));
+  if (!steps) return new Set<string>();
+  const succeeded = new Set(steps.filter((s) => !s.error).map(stepKey));
   return new Set(
-    steps.filter((s) => s.error && succeeded.has(s.step)).map((s) => s.step),
+    steps.filter((s) => s.error && succeeded.has(stepKey(s))).map(stepKey),
   );
 });
+
+const isRetried = (s: CustomStepLog) => retriedStepKeys.value.has(stepKey(s));
+
+/**
+ * Where the cleanup steps start, so the log can rule a line under the chain and name what comes
+ * after it. Only the first one carries it: the grouping is positional, not a tag per step.
+ */
+const startsCleanupGroup = (i: number) => {
+  const steps = customDetail.value;
+  if (!steps || steps[i]?.phase !== "cleanup") return false;
+  return i === 0 || steps[i - 1].phase !== "cleanup";
+};
 
 onMounted(async () => {
   jobs.value = await jobsApi.list();
@@ -1771,6 +1793,26 @@ function hasWarning(l: Log): boolean {
   flex-direction: column;
   gap: 10px;
   max-width: 560px;
+}
+
+/* Rules a line across the report saying the chain has ended and the cleanup has begun. */
+.custom-cleanup-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  letter-spacing: 0.04em;
+}
+
+.custom-cleanup-divider::before,
+.custom-cleanup-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
 }
 
 .custom-step {

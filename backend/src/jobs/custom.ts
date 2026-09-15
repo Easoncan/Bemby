@@ -693,6 +693,7 @@ export function stepNeedingBot(
       case "join_group":
       case "subscribe_channel":
       case "open_url":
+      case "update_profile":
       case "delay":
         return false;
       default:
@@ -727,6 +728,17 @@ export async function runCustom(
     );
   }
 
+  // The finally actions run through the same code as the chain, so a step that needs a bot
+  // needs one there too -- and catching it now beats failing at cleanup time, when nothing is
+  // recorded and the failure would go unseen.
+  const missingFinally = stepNeedingBot(config.finallyActions ?? [], botUsername);
+  if (missingFinally) {
+    throw new Error(
+      `Finally step ${missingFinally.at + 1} (${missingFinally.type}) needs a target bot, ` +
+        "but this job has none. Set one on the job, or give the step its own contact.",
+    );
+  }
+
   const client = new TelegramClient(
     new StringSession(sessionString),
     apiId,
@@ -745,10 +757,29 @@ export async function runCustom(
 
     let lastJobError: unknown = null;
 
-    for (let jobAttempt = 1; jobAttempt <= jobMaxRetries; jobAttempt++) {
-      if (signal?.aborted) throw new Error("Job cancelled");
+    /**
+     * The chain runs up to `jobMaxRetries` times; one pass after it runs the finally actions.
+     * Counting that last pass as an iteration is what lets both share the loop below, and with
+     * it every bit of step handling -- the only things that differ between them are the list
+     * they walk and how their steps are tagged.
+     *
+     * A cleanup pass turns two things off at once: abort checks, and the effect of a failure on
+     * the run. It runs on the way out of a run that succeeded, ran out of retries, or was
+     * cancelled, and it exists to put the account back rather than to be audited -- so its
+     * steps are logged apart from the chain and a step failing inside it changes nothing about
+     * how the run is reported. It is also not retried as a whole: one pass is all it gets,
+     * though each of its steps still honours its own retry count.
+     */
+    const cleanupPass = jobMaxRetries + 1;
 
-      // State shared across actions within this job attempt
+    for (let jobAttempt = 1; jobAttempt <= cleanupPass; jobAttempt++) {
+      const pass: "chain" | "cleanup" =
+        jobAttempt === cleanupPass ? "cleanup" : "chain";
+      const actions =
+        pass === "cleanup" ? config.finallyActions ?? [] : config.actions ?? [];
+      if (pass === "cleanup" && actions.length === 0) break;
+
+      // State shared across actions within this pass
       let lastMessages: Api.Message[] = [];
       let lastButtonsMsg: Api.Message | null = null;
       let sendAnchor: SendAnchor | null = null;
@@ -756,11 +787,19 @@ export async function runCustom(
       // contact handle -- the scope anchor for click_message_button.
       const contactAnchors = new Map<string, SendAnchor>();
       let jobAttemptFailed = false;
+      let cancelled = false;
 
-      for (let i = 0; i < config.actions.length; i++) {
-        if (signal?.aborted) throw new Error("Job cancelled");
+      for (let i = 0; i < actions.length; i++) {
+        if (pass === "chain" && (jobAttemptFailed || signal?.aborted)) {
+          // The chain stops at the first action that has used up its retries: what follows it
+          // was written on the assumption that it worked. A cancelled run leaves the same way
+          // rather than throwing out of the loop, because the cleanup pass still has to happen.
+          if (signal?.aborted) jobAttemptFailed = true;
+          break;
+        }
 
-        const action = config.actions[i];
+        const action = actions[i];
+
         const actionMaxRetries =
           action.type !== "delay" && "maxRetries" in action
             ? (action.maxRetries ?? 0)
@@ -777,9 +816,15 @@ export async function runCustom(
             step: i + 1,
             actionType: action.type,
             label: "",
-            ...(jobMaxRetries > 1 ? { jobAttempt } : {}),
+            ...(pass === "cleanup" ? { phase: "cleanup" as const } : {}),
+            // A cleanup step is numbered within its own group, so the job attempt that carried
+            // it says nothing -- and would only read as a retry that never happened.
+            ...(pass === "chain" && jobMaxRetries > 1 ? { jobAttempt } : {}),
             ...(actionMaxRetries > 0 ? { actionAttempt } : {}),
           };
+          // Cleanup steps are written down like the chain's and tagged, so the report reads as
+          // two groups: what failed in there is worth seeing even though it cannot change how
+          // the run is judged.
           log.steps.push(step);
           const t0 = Date.now();
 
@@ -967,6 +1012,40 @@ export async function runCustom(
                   ? parsed.buttons
                   : undefined;
                 step.result = `Received ${msgs.length} message(s)`;
+                break;
+              }
+
+              case "update_profile": {
+                // The bio is taken from the step verbatim, so a blank one clears it -- which is
+                // the whole point of a cleanup step. Only the bio is ever changed: Telegram
+                // rejects an UpdateProfile that arrives without a first name, so the current
+                // one is read back and passed through untouched. Renaming the account is not
+                // something a checkin should do as a side effect.
+                // Invoked on the client this job already has: opening a second connection on
+                // the same session is what earns an AUTH_KEY_DUPLICATED.
+                const about = expandCommand(action.about ?? "");
+                const shown = about.length > 30 ? `${about.slice(0, 30)}…` : about;
+                step.label = about ? `Set bio: "${shown}"` : "Clear bio";
+                if (about.length > 140) {
+                  throw new Error(
+                    `Bio is ${about.length} characters; Telegram allows 70 (140 with Premium)`,
+                  );
+                }
+                const me = (await client.getMe()) as Api.User;
+                if (!me || !me.firstName) {
+                  throw new Error(
+                    "This account has no first name, and Telegram will not accept a profile " +
+                      "update without one.",
+                  );
+                }
+                await client.invoke(
+                  new Api.account.UpdateProfile({
+                    firstName: me.firstName,
+                    lastName: me.lastName ?? "",
+                    about,
+                  }),
+                );
+                step.result = about ? `Bio set to "${shown}"` : "Bio cleared";
                 break;
               }
 
@@ -2782,8 +2861,13 @@ export async function runCustom(
 
             actionSucceeded = true;
           } catch (err: any) {
-            // Cancellation is never retried
-            if (err?.message === "Job cancelled") throw err;
+            // Cancellation is never retried, and it does not abandon the run outright either:
+            // it ends this pass in the ordinary way and leaves the cleanup pass to follow.
+            if (err?.message === "Job cancelled") {
+              cancelled = true;
+              jobAttemptFailed = true;
+              break;
+            }
 
             step.error = err?.message ?? String(err);
             step.errorName = err?.name ?? err?.constructor?.name;
@@ -2795,21 +2879,32 @@ export async function runCustom(
               step.aiResponse = err.aiResponse;
 
             if (actionAttempt > actionMaxRetries) {
-              // All action retries exhausted -- fail this job attempt
-              jobAttemptFailed = true;
-              lastJobError = err;
+              // All action retries exhausted. In a cleanup pass the step is logged with the
+              // error it ended on, but that is as far as it goes: the run keeps the verdict the
+              // chain earned. What could not be undone is visible in the report, not silent.
+              if (pass === "chain") {
+                jobAttemptFailed = true;
+                lastJobError = err;
+              }
             }
           } finally {
             step.durationMs = Date.now() - t0;
           }
         }
-
-        if (jobAttemptFailed) break;
       }
 
+      if (pass === "cleanup") break;
+
+      // A chain that is finished, and a run that was cancelled and will not be retried either,
+      // both land on the cleanup pass by skipping whatever retries are left. Only a plain
+      // failure goes round for another attempt.
       if (!jobAttemptFailed) {
         lastJobError = null;
-        break;
+        jobAttempt = cleanupPass - 1;
+      } else if (cancelled || signal?.aborted) {
+        // A cancelled run reports as cancelled, whatever the step in flight failed with.
+        lastJobError = new Error("Job cancelled");
+        jobAttempt = cleanupPass - 1;
       }
     }
 

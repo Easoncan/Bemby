@@ -466,7 +466,13 @@ export type CustomAction =
       /** Work through the rest of the proxy list when an exit is refused. */
       tryAllProxies?: boolean;
     }
-  | { type: "subscribe_channel"; channelId: string; checkMembership?: boolean };
+  | { type: "subscribe_channel"; channelId: string; checkMembership?: boolean }
+  | {
+      /** Set the account's own Telegram bio. Blank clears it. */
+      type: "update_profile";
+      about?: string;
+      maxRetries?: number;
+    };
 
 /** One sub-step of `open_url`, run against the loaded page. */
 export type WebStep =
@@ -493,6 +499,11 @@ export type WebStepLog = {
 
 export type CustomConfig = {
   actions: CustomAction[];
+  /**
+   * Cleanup chain run once after `actions` is done with, whether it succeeded, ran out of
+   * retries or was cancelled. Nothing it does is recorded against the run.
+   */
+  finallyActions?: CustomAction[];
   maxRetries?: number;
   proxyId?: string;
 };
@@ -540,6 +551,8 @@ export type AutoregConfig = {
 
 export type CustomStepLog = {
   step: number;
+  /** Set on finally-action steps; absent for the main chain. Numbers restart within each group. */
+  phase?: "cleanup";
   actionType: string;
   label: string;
   preClickHtml?: string;

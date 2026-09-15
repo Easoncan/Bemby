@@ -256,7 +256,17 @@ export type CustomAction =
       /** Work through the rest of the proxy list when an exit is refused. Defaults to true. */
       tryAllProxies?: boolean;
     }
-  | { type: "subscribe_channel"; channelId: string; checkMembership?: boolean };
+  | { type: "subscribe_channel"; channelId: string; checkMembership?: boolean }
+  | {
+      // Set the account's own Telegram bio from the job. Always applied -- a blank one clears
+      // the bio, which is what a checkin that demanded a keyword in the bio needs put back
+      // afterwards. The name is deliberately not touched: changing who the account appears to
+      // be is not something a checkin step should do as a side effect.
+      type: "update_profile";
+      /** New bio; blank clears it. Supports {word:N} {num:N} {alpha:N} {uuid}. */
+      about?: string;
+      maxRetries?: number;
+    };
 
 /**
  * One sub-step of `open_url`, run against the loaded page.
@@ -359,6 +369,14 @@ export type WebStepLog = {
 
 export type CustomConfig = {
   actions: CustomAction[];
+  /**
+   * Cleanup chain run once after `actions` is done with, whether it succeeded, ran out of
+   * retries or was cancelled. Built like `actions` and capable of the same steps, but nothing
+   * it does is recorded: no steps in the run log, no warnings, and a step that fails changes
+   * nothing about how the run is reported. That is the point -- it is there to put the account
+   * back the way it was, not to be audited.
+   */
+  finallyActions?: CustomAction[];
   maxRetries?: number;
   proxyId?: string;
 };
@@ -429,6 +447,12 @@ export type AutoregConfig = {
 
 export type CustomStepLog = {
   step: number;
+  /**
+   * Which list the step came from: absent for the main chain, "cleanup" for one of the finally
+   * actions. Cleanup steps are numbered within their own group, so numbers repeat across the
+   * two -- this is what tells them apart.
+   */
+  phase?: "cleanup";
   actionType: string;
   label: string;
   /** For click_button: the bot message we clicked on, when we had to wait for it */

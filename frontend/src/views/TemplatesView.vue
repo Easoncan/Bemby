@@ -254,451 +254,44 @@
             <div class="form-group">
               <label class="form-label">{{ t('jobs.custom.actions') }}</label>
               <div v-if="customActions.length === 0" style="font-size:13px;color:#aaa;padding:10px 0">{{ t('jobs.custom.noActions') }}</div>
-              <div v-for="(action, i) in customActions" :key="i" class="custom-action-card">
-                <div class="custom-action-header">
-                  <span class="custom-action-num">{{ i + 1 }}</span>
-                  <select v-model="action.type" class="form-select custom-action-type-select">
-                    <option value="send_command">{{ t('jobs.custom.actionSendCommand') }}</option>
-                    <option value="send_contact_message">{{ t('jobs.custom.actionSendContactMessage') }}</option>
-                    <option value="wait_reply">{{ t('jobs.custom.actionWaitReply') }}</option>
-                    <option value="delay">{{ t('jobs.custom.actionDelay') }}</option>
-                    <option value="click_button">{{ t('jobs.custom.actionClickButton') }}</option>
-                    <option value="click_message_button">{{ t('jobs.custom.actionClickMessageButton') }}</option>
-                    <option value="ai_multiple_btn" :disabled="aiKeyMissing">{{ t('jobs.custom.actionAiMultipleBtn') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
-                    <option value="enter_captcha" :disabled="aiKeyMissing">{{ t('jobs.custom.actionEnterCaptcha') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
-                    <option value="join_group">{{ t('jobs.custom.actionJoinGroup') }}</option>
-                    <option value="subscribe_channel">{{ t('jobs.custom.actionSubscribeChannel') }}</option>
-                    <option value="open_mini_app" :disabled="cfBrowserMissing">{{ t('jobs.custom.actionOpenMiniApp') }}{{ cfBrowserMissing ? ' (' + t('jobs.noCfBrowser') + ')' : '' }}</option>
-                    <option value="open_mini_app_url" :disabled="cfBrowserMissing">{{ t('jobs.custom.actionOpenMiniAppUrl') }}{{ cfBrowserMissing ? ' (' + t('jobs.noCfBrowser') + ')' : '' }}</option>
-                    <option value="open_bot_menu_app" :disabled="cfBrowserMissing">{{ t('jobs.custom.actionOpenBotMenuApp') }}{{ cfBrowserMissing ? ' (' + t('jobs.noCfBrowser') + ')' : '' }}</option>
-                    <option value="open_url" :disabled="cfBrowserMissing">{{ t('jobs.custom.actionOpenUrl') }}{{ cfBrowserMissing ? ' (' + t('jobs.noCfBrowser') + ')' : '' }}</option>
-                  </select>
-                  <button type="button" class="btn btn-ghost btn-sm btn-icon" :disabled="i === 0" @click="moveUp(i)"><i class="fa-solid fa-arrow-up"></i></button>
-                  <button type="button" class="btn btn-ghost btn-sm btn-icon" :disabled="i === customActions.length - 1" @click="moveDown(i)"><i class="fa-solid fa-arrow-down"></i></button>
-                  <button type="button" class="btn btn-danger btn-sm btn-icon" @click="removeAction(i)"><i class="fa-solid fa-xmark"></i></button>
-                </div>
+              <CustomActionCard
+                v-for="(action, i) in customActions"
+                :key="i"
+                :action="action"
+                :index="i"
+                :count="customActions.length"
+                :ai-key-missing="aiKeyMissing"
+                :cf-browser-missing="cfBrowserMissing"
+                @move-up="chainOps.move(i, -1)"
+                @move-down="chainOps.move(i, 1)"
+                @remove="chainOps.remove(i)"
+              />
 
-                <!-- send_command -->
-                <div v-if="action.type === 'send_command'" class="custom-action-params">
-                  <div class="form-row" style="margin-bottom:0">
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelContent') }}</label>
-                      <select v-model="action.contentDropdown" class="form-select">
-                        <option value="/start">/start</option>
-                        <option value="/checkin">/checkin</option>
-                        <option value="{aiInput}" :disabled="aiKeyMissing">{{ t('jobs.aiInputOption') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
-                        <option value="custom">{{ t('common.custom') }}...</option>
-                      </select>
-                      <input v-if="action.contentDropdown === 'custom'" v-model="action.contentCustom" class="form-input" style="margin-top:6px" placeholder="/mycommand" />
-                      <template v-if="action.contentDropdown === '{aiInput}'">
-                        <input v-model.trim="action.contentAiInputLength" class="form-input" style="margin-top:6px" type="number" min="1" max="20" :placeholder="t('jobs.aiInputLengthPlaceholder')" />
-                        <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiInputLengthHint') }}</div>
-                        <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
-                      </template>
-                      <div v-else style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contentHint') }}</div>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-                      <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
-                    </div>
-                  </div>
-                </div>
-
-                <!-- send_contact_message -->
-                <div v-if="action.type === 'send_contact_message'" class="custom-action-params">
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelContact') }}</label>
-                    <input v-model.trim="action.contact" class="form-input" :placeholder="t('jobs.custom.contactPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contactHint') }}</div>
-                  </div>
-                  <div class="form-row" style="margin-bottom:0;margin-top:8px">
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelContent') }}</label>
-                      <select v-model="action.contentDropdown" class="form-select">
-                        <option value="/start">/start</option>
-                        <option value="/checkin">/checkin</option>
-                        <option value="{aiInput}" :disabled="aiKeyMissing">{{ t('jobs.aiInputOption') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
-                        <option value="custom">{{ t('common.custom') }}...</option>
-                      </select>
-                      <input v-if="action.contentDropdown === 'custom'" v-model="action.contentCustom" class="form-input" style="margin-top:6px" placeholder="/mycommand" />
-                      <template v-if="action.contentDropdown === '{aiInput}'">
-                        <input v-model.trim="action.contentAiInputLength" class="form-input" style="margin-top:6px" type="number" min="1" max="20" :placeholder="t('jobs.aiInputLengthPlaceholder')" />
-                        <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiInputLengthHint') }}</div>
-                        <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
-                      </template>
-                      <div v-else style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contentHint') }}</div>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-                      <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
-                    </div>
-                  </div>
-                </div>
-
-                <!-- wait_reply -->
-                <div v-if="action.type === 'wait_reply'" class="custom-action-params">
-                  <div class="form-row" style="margin-bottom:0">
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMaxWait') }}</label>
-                      <input v-model.number="action.maxWaitMs" class="form-input" type="number" min="1000" step="1000" />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-                      <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
-                    </div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelScope') }}</label>
-                    <input v-model.number="action.scope" class="form-input" type="number" max="0" step="1" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.scopeHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelSuccessContains') }}</label>
-                    <input v-model.trim="action.successContains" class="form-input" :placeholder="t('jobs.custom.successContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.successContainsHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelFailContains') }}</label>
-                    <input v-model.trim="action.failContains" class="form-input" :placeholder="t('jobs.custom.failContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.failContainsHint') }}</div>
-                  </div>
-                </div>
-
-                <!-- delay -->
-                <div v-if="action.type === 'delay'" class="custom-action-params">
-                  <label class="form-label">{{ t('jobs.custom.labelWaitMs') }}</label>
-                  <input v-model.number="action.waitMs" class="form-input" type="number" min="100" step="500" />
-                </div>
-
-                <!-- click_button -->
-                <div v-if="action.type === 'click_button'" class="custom-action-params">
-                  <div class="form-row" style="margin-bottom:0">
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelButton') }}</label>
-                      <select v-model="action.buttonDropdown" class="form-select">
-                        <option value="签到">签到</option>
-                        <option value="{aiBtn}" :disabled="aiKeyMissing">{{ t('jobs.aiBtnOption') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
-                        <option value="{anyBtn}">{{ t('jobs.anyBtnOption') }}</option>
-                        <option value="custom">{{ t('common.custom') }}...</option>
-                      </select>
-                      <input v-if="action.buttonDropdown === 'custom'" v-model="action.buttonCustom" class="form-input" style="margin-top:6px" placeholder="Custom button text" />
-                      <template v-if="action.buttonDropdown === '{aiBtn}'">
-                        <input v-model.trim="action.buttonAiHint" class="form-input" style="margin-top:6px" :placeholder="t('jobs.aiHintPlaceholder')" />
-                        <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiHintHint') }}</div>
-                        <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
-                      </template>
-                      <div v-else style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.buttonHint') }}</div>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-                      <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
-                    </div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelMaxWait') }}</label>
-                    <input v-model.number="action.maxWaitMs" class="form-input" type="number" min="1000" step="1000" />
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelScope') }}</label>
-                    <input v-model.number="action.scope" class="form-input" type="number" max="0" step="1" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.scopeHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelSuccessContains') }}</label>
-                    <input v-model.trim="action.successContains" class="form-input" :placeholder="t('jobs.custom.successContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.successContainsHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelFailContains') }}</label>
-                    <input v-model.trim="action.failContains" class="form-input" :placeholder="t('jobs.custom.failContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.failContainsHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-checkbox-label">
-                      <input type="checkbox" v-model="action.cfChallenge" :disabled="cfBrowserMissing" />
-                      {{ t('jobs.custom.labelCfChallenge') }}
-                    </label>
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.cfChallengeHint') }}</div>
-                    <div v-if="cfBrowserMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.cfBrowserWarning') }}</div>
-                  </div>
-                </div>
-
-                <!-- click_message_button -->
-                <div v-if="action.type === 'click_message_button'" class="custom-action-params">
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelContact') }}</label>
-                    <input v-model.trim="action.contact" class="form-input" :placeholder="t('jobs.custom.contactPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contactHint') }}</div>
-                  </div>
-                  <div class="form-row" style="margin-bottom:0;margin-top:8px">
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelButton') }}</label>
-                      <select v-model="action.buttonDropdown" class="form-select">
-                        <option value="签到">签到</option>
-                        <option value="{aiBtn}" :disabled="aiKeyMissing">{{ t('jobs.aiBtnOption') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
-                        <option value="{anyBtn}">{{ t('jobs.anyBtnOption') }}</option>
-                        <option value="custom">{{ t('common.custom') }}...</option>
-                      </select>
-                      <input v-if="action.buttonDropdown === 'custom'" v-model="action.buttonCustom" class="form-input" style="margin-top:6px" placeholder="Custom button text" />
-                      <template v-if="action.buttonDropdown === '{aiBtn}'">
-                        <input v-model.trim="action.buttonAiHint" class="form-input" style="margin-top:6px" :placeholder="t('jobs.aiHintPlaceholder')" />
-                        <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiHintHint') }}</div>
-                        <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
-                      </template>
-                      <div v-else style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.buttonHint') }}</div>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-                      <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
-                    </div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelMaxWait') }}</label>
-                    <input v-model.number="action.maxWaitMs" class="form-input" type="number" min="1000" step="1000" />
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelScope') }}</label>
-                    <input v-model.number="action.scope" class="form-input" type="number" max="0" step="1" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.scopeHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelSuccessContains') }}</label>
-                    <input v-model.trim="action.successContains" class="form-input" :placeholder="t('jobs.custom.successContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.successContainsHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelFailContains') }}</label>
-                    <input v-model.trim="action.failContains" class="form-input" :placeholder="t('jobs.custom.failContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.failContainsHint') }}</div>
-                  </div>
-                </div>
-
-                <!-- ai_multiple_btn -->
-                <div v-if="action.type === 'ai_multiple_btn'" class="custom-action-params">
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelContactOptional') }}</label>
-                    <input v-model.trim="action.contact" class="form-input" :placeholder="t('jobs.custom.contactOptionalPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contactOptionalHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.aiHintLabel') }}</label>
-                    <input v-model.trim="action.buttonAiHint" class="form-input" :placeholder="t('jobs.aiHintPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.aiMultipleBtnHint') }}</div>
-                    <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
-                  </div>
-                  <div class="form-row" style="margin-bottom:0;margin-top:8px">
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelGapMs') }}</label>
-                      <input v-model.number="action.gapMs" class="form-input" type="number" min="0" step="500" />
-                      <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.gapMsHint') }}</div>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-                      <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
-                    </div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelMaxWait') }}</label>
-                    <input v-model.number="action.maxWaitMs" class="form-input" type="number" min="1000" step="1000" />
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelScope') }}</label>
-                    <input v-model.number="action.scope" class="form-input" type="number" max="0" step="1" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.scopeHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelSuccessContains') }}</label>
-                    <input v-model.trim="action.successContains" class="form-input" :placeholder="t('jobs.custom.successContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.successContainsHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelFailContains') }}</label>
-                    <input v-model.trim="action.failContains" class="form-input" :placeholder="t('jobs.custom.failContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.failContainsHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-checkbox-label">
-                      <input type="checkbox" v-model="action.cfChallenge" :disabled="cfBrowserMissing" />
-                      {{ t('jobs.custom.labelCfChallenge') }}
-                    </label>
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.cfChallengeHint') }}</div>
-                    <div v-if="cfBrowserMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.cfBrowserWarning') }}</div>
-                  </div>
-                </div>
-
-                <!-- enter_captcha -->
-                <div v-if="action.type === 'enter_captcha'" class="custom-action-params">
-                  <div class="form-row" style="margin-bottom:0">
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMaxWait') }}</label>
-                      <input v-model.number="action.maxWaitMs" class="form-input" type="number" min="1000" step="1000" />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelCaptchaLength') }}</label>
-                      <input v-model.trim="action.captchaLength" class="form-input" type="number" min="1" max="20" :placeholder="t('jobs.aiInputLengthPlaceholder')" />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-                      <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
-                    </div>
-                  </div>
-                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiInputLengthHint') }}</div>
-                  <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
-                </div>
-
-                <!-- join_group -->
-                <div v-if="action.type === 'join_group'" class="custom-action-params">
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelGroupId') }}</label>
-                    <input v-model.trim="action.groupId" class="form-input" :placeholder="t('jobs.custom.groupIdPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.groupIdHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-checkbox-label">
-                      <input type="checkbox" v-model="action.checkMembership" />
-                      {{ t('jobs.custom.labelCheckMembership') }}
-                    </label>
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.checkMembershipHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.custom.labelVerifyButton') }}</label>
-                    <input v-model.trim="action.verifyButton" class="form-input" :placeholder="t('jobs.custom.verifyButtonPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.verifyButtonHint') }}</div>
-                  </div>
-                  <div v-if="action.verifyButton" class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.custom.labelVerifyWaitMs') }}</label>
-                    <input v-model.number="action.verifyWaitMs" type="number" min="1000" step="1000" class="form-input" />
-                  </div>
-                </div>
-
-                <!-- subscribe_channel -->
-                <div v-if="action.type === 'subscribe_channel'" class="custom-action-params">
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.custom.labelChannelId') }}</label>
-                    <input v-model.trim="action.channelId" class="form-input" :placeholder="t('jobs.custom.channelIdPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.channelIdHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-checkbox-label">
-                      <input type="checkbox" v-model="action.checkMembership" />
-                      {{ t('jobs.custom.labelCheckSubscription') }}
-                    </label>
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.checkSubscriptionHint') }}</div>
-                  </div>
-                </div>
-
-                <!-- open_mini_app / open_mini_app_url / open_bot_menu_app -->
-                <div v-if="action.type === 'open_mini_app' || action.type === 'open_mini_app_url' || action.type === 'open_bot_menu_app'" class="custom-action-params">
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ action.type === 'open_mini_app' ? t('jobs.custom.labelContactOptional') : action.type === 'open_mini_app_url' ? t('jobs.custom.labelMiniAppOwner') : t('jobs.custom.labelMenuAppOwner') }}</label>
-                    <input v-model.trim="action.contact" class="form-input" :placeholder="t('jobs.custom.contactOptionalPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ action.type === 'open_mini_app' ? t('jobs.custom.contactOptionalHint') : action.type === 'open_mini_app_url' ? t('jobs.custom.miniAppOwnerHint') : t('jobs.custom.menuAppOwnerHint') }}</div>
-                  </div>
-                  <div v-if="action.type === 'open_mini_app_url'" class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.custom.labelMiniAppUrl') }}</label>
-                    <input v-model.trim="action.url" class="form-input" :placeholder="t('jobs.custom.miniAppUrlPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.miniAppUrlHint') }}</div>
-                  </div>
-                  <div v-if="action.type === 'open_mini_app'" class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.custom.labelMiniAppButton') }}</label>
-                    <input v-model.trim="action.button" class="form-input" :placeholder="t('jobs.custom.miniAppButtonPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.miniAppButtonHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.custom.labelInAppButton') }}</label>
-                    <input v-model.trim="action.appButton" class="form-input" :placeholder="t('jobs.custom.inAppButtonPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.inAppButtonHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.custom.labelSuccessContains') }}</label>
-                    <input v-model.trim="action.successContains" class="form-input" :placeholder="t('jobs.custom.successContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.successContainsHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.custom.labelFailContains') }}</label>
-                    <input v-model.trim="action.failContains" class="form-input" :placeholder="t('jobs.custom.failContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.failContainsHint') }}</div>
-                  </div>
-                  <div class="form-row" style="margin-bottom:0;margin-top:8px">
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-                      <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMiniAppMaxWait') }}</label>
-                      <input v-model.number="action.miniAppMaxWaitMs" class="form-input" type="number" min="0" step="10000" placeholder="300000" />
-                    </div>
-                  </div>
-                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.miniAppMaxWaitHint') }}</div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.custom.labelMiniAppProxy') }}</label>
-                    <select v-model="action.miniAppProxyId" class="form-select">
-                      <option value="">{{ t('jobs.custom.miniAppProxyJob') }}</option>
-                      <option value="direct">{{ t('jobs.custom.miniAppProxyDirect') }}</option>
-                      <option v-for="p in proxiesList" :key="p.id" :value="p.id">{{ p.name }}</option>
-                    </select>
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.miniAppProxyHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-checkbox-label">
-                      <input type="checkbox" v-model="action.miniAppTryAllProxies" />
-                      {{ t('jobs.custom.labelMiniAppTryAll') }}
-                    </label>
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.miniAppTryAllHint') }}</div>
-                  </div>
-                </div>
-
-                <!-- open_url -->
-                <div v-if="action.type === 'open_url'" class="custom-action-params">
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">{{ t('jobs.web.labelUrl') }}</label>
-                    <input v-model.trim="action.url" class="form-input" :placeholder="t('jobs.web.urlPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.web.urlHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:10px">
-                    <WebStepsEditor :steps="action.webSteps" :ai-key-missing="aiKeyMissing" />
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.custom.labelSuccessContains') }}</label>
-                    <input v-model.trim="action.successContains" class="form-input" :placeholder="t('jobs.custom.successContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.successContainsHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.custom.labelFailContains') }}</label>
-                    <input v-model.trim="action.failContains" class="form-input" :placeholder="t('jobs.custom.failContainsPlaceholder')" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.failContainsHint') }}</div>
-                  </div>
-                  <div class="form-row" style="margin-bottom:0;margin-top:8px">
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-                      <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">{{ t('jobs.custom.labelMiniAppMaxWait') }}</label>
-                      <input v-model.number="action.miniAppMaxWaitMs" class="form-input" type="number" min="0" step="10000" placeholder="300000" />
-                    </div>
-                  </div>
-                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.miniAppMaxWaitHint') }}</div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-label">{{ t('jobs.custom.labelMiniAppProxy') }}</label>
-                    <select v-model="action.miniAppProxyId" class="form-select">
-                      <option value="">{{ t('jobs.custom.miniAppProxyJob') }}</option>
-                      <option value="direct">{{ t('jobs.custom.miniAppProxyDirect') }}</option>
-                      <option v-for="p in proxiesList" :key="p.id" :value="p.id">{{ p.name }}</option>
-                    </select>
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.miniAppProxyHint') }}</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
-                    <label class="form-checkbox-label">
-                      <input type="checkbox" v-model="action.miniAppTryAllProxies" />
-                      {{ t('jobs.custom.labelMiniAppTryAll') }}
-                    </label>
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.miniAppTryAllHint') }}</div>
-                  </div>
-                </div>
-              </div>
-              <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" @click="addAction">
+              <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" @click="chainOps.add()">
                 <i class="fa-solid fa-plus"></i> {{ t('jobs.custom.addAction') }}
+              </button>
+            </div>
+
+            <!-- Cleanup chain: runs once after the chain above, however it ended -->
+            <div class="form-group">
+              <label class="form-label">{{ t('jobs.custom.finallyLabel') }}</label>
+              <div style="font-size:11px;color:#aaa;margin-bottom:8px">{{ t('jobs.custom.finallyHint') }}</div>
+
+              <CustomActionCard
+                v-for="(action, i) in customFinallyActions"
+                :key="i"
+                :action="action"
+                :index="i"
+                :count="customFinallyActions.length"
+                :ai-key-missing="aiKeyMissing"
+                :cf-browser-missing="cfBrowserMissing"
+                @move-up="finallyOps.move(i, -1)"
+                @move-down="finallyOps.move(i, 1)"
+                @remove="finallyOps.remove(i)"
+              />
+
+              <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" @click="finallyOps.add()">
+                <i class="fa-solid fa-plus"></i> {{ t('jobs.custom.addFinallyAction') }}
               </button>
             </div>
           </template>
@@ -1122,53 +715,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue';
-import { templatesApi, settingsApi, accountsApi, tgClientApi, jobsApi, type JobTemplate, type Settings, type UAPreset, type Proxy, type EmbywatchConfig, type CustomConfig, type CustomAction, type AutoregConfig, type AvailableAccount } from '../api/client';
+import { ref, reactive, computed, onMounted, watch, type Ref } from 'vue';
+import { templatesApi, settingsApi, accountsApi, tgClientApi, jobsApi, type JobTemplate, type Settings, type UAPreset, type Proxy, type EmbywatchConfig, type CustomConfig, type AutoregConfig, type AvailableAccount } from '../api/client';
 import { t } from '../i18n';
 import { regexValid } from '../utils/regexCheck';
 import { usePersistedRef } from '../composables/usePersistedRef';
 import { debounce } from '../composables/useDebounce';
 import { formatAccountLabel, loadAccountDisplaySetting } from '../composables/accountDisplay';
 import PaginationBar from '../components/PaginationBar.vue';
-import WebStepsEditor from '../components/WebStepsEditor.vue';
-import { webStepsFromConfig, webStepsToConfig, type WebStepForm } from '../composables/webSteps';
-
-type CustomActionForm = {
-  type: 'send_command' | 'send_contact_message' | 'wait_reply' | 'delay' | 'click_button' | 'click_message_button' | 'ai_multiple_btn' | 'enter_captcha' | 'join_group' | 'subscribe_channel' | 'open_mini_app' | 'open_mini_app_url' | 'open_bot_menu_app' | 'open_url';
-  content: string;
-  contentDropdown: string;
-  contentCustom: string;
-  contentAiInputLength: string;
-  maxWaitMs: number;
-  waitMs: number;
-  gapMs: number;
-  button: string;
-  buttonDropdown: string;
-  buttonCustom: string;
-  buttonAiHint: string;
-  maxRetries: number;
-  scope: number;
-  captchaLength: string;
-  successContains: string;
-  failContains: string;
-  cfChallenge: boolean;
-  contact: string;
-  groupId: string;
-  checkMembership: boolean;
-  verifyButton: string;
-  verifyWaitMs: number;
-  channelId: string;
-  appButton: string;
-  /** open_mini_app: browser budget, 0 = default */
-  miniAppMaxWaitMs: number;
-  /** open_mini_app: pinned browser proxy id, 'direct', or '' for the job proxy */
-  miniAppProxyId: string;
-  miniAppTryAllProxies: boolean;
-  /** open_url: the page to open */
-  url: string;
-  /** open_url: sub-steps run on the page once it is up */
-  webSteps: WebStepForm[];
-};
+import CustomActionCard from '../components/CustomActionCard.vue';
+import { actionFromConfig, actionToConfig, defaultAction, type CustomActionForm } from '../composables/customActions';
 
 const templates = ref<JobTemplate[]>([]);
 const settings = ref<Settings | null>(null);
@@ -1300,7 +856,14 @@ watch(templates, () => {
 });
 
 const customActions = ref<CustomActionForm[]>([]);
+const customFinallyActions = ref<CustomActionForm[]>([]);
 const customJobMaxRetries = ref(1);
+
+/** Drop both chains. Every path that abandons the editor's state starts from here. */
+function resetCustomChains() {
+  customActions.value = [];
+  customFinallyActions.value = [];
+}
 
 const form = reactive({
   name: '',
@@ -1397,8 +960,6 @@ const embyServer = reactive<{ protocol: 'https' | 'http'; host: string; port: nu
 });
 
 const CMD_PRESETS = new Set(['', '/start', '/checkin']);
-const ACTION_CMD_PRESETS = new Set(['/start', '/checkin']);
-const ACTION_BTN_PRESETS = new Set(['签到', '{anyBtn}']);
 const BTN_PRESETS = new Set(['', '签到', '{aiBtn}', '{anyBtn}']);
 const cmdDropdown = ref('');
 const cmdCustom = ref('');
@@ -1443,7 +1004,7 @@ function onJobTypeChange() {
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
   embyUaDropdown.value = '';
   tplProxyId.value = '';
-  customActions.value = [];
+  resetCustomChains();
   customJobMaxRetries.value = 1;
   btnAiHint.value = '';
   tplCheckinSuccessContains.value = '';
@@ -1453,30 +1014,25 @@ function onJobTypeChange() {
   setCmdState(''); setBtnState('');
 }
 
-function defaultAction(): CustomActionForm {
+/**
+ * Both chains are edited the same way -- append, drop, nudge up or down -- so they share one
+ * set of operations rather than carrying a near-identical copy each.
+ */
+function actionListOps(list: Ref<CustomActionForm[]>) {
   return {
-    type: 'send_command', content: '/start', contentDropdown: '/start', contentCustom: '',
-    contentAiInputLength: '', maxWaitMs: 30000, waitMs: 2000, gapMs: 1000, button: '签到',
-    buttonDropdown: '签到', buttonCustom: '', buttonAiHint: '', maxRetries: 3, scope: 0,
-    captchaLength: '', successContains: '', failContains: '', cfChallenge: false, contact: '', groupId: '', checkMembership: false,
-    verifyButton: '', verifyWaitMs: 30000, channelId: '', appButton: '',
-    miniAppMaxWaitMs: 300000, miniAppProxyId: '', miniAppTryAllProxies: true,
-    url: '', webSteps: [],
+    add: () => list.value.push(defaultAction()),
+    remove: (i: number) => { list.value.splice(i, 1); },
+    /** `step` is -1 for up and +1 for down: the two differ by a sign, not by behaviour. */
+    move: (i: number, step: number) => {
+      const to = i + step;
+      if (to < 0 || to >= list.value.length) return;
+      [list.value[i], list.value[to]] = [list.value[to], list.value[i]];
+    },
   };
 }
 
-function addAction() { customActions.value.push(defaultAction()); }
-function removeAction(i: number) { customActions.value.splice(i, 1); }
-function moveUp(i: number) {
-  if (i === 0) return;
-  const arr = customActions.value;
-  [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
-}
-function moveDown(i: number) {
-  const arr = customActions.value;
-  if (i >= arr.length - 1) return;
-  [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]];
-}
+const chainOps = actionListOps(customActions);
+const finallyOps = actionListOps(customFinallyActions);
 
 function jobTypeBadge(type: string) {
   const map: Record<string, string> = {
@@ -1547,133 +1103,12 @@ function buildConfig(): EmbywatchConfig | CustomConfig | AutoregConfig | null {
   }
   if (form.jobType === 'custom') {
     const cfg: CustomConfig = {
-      actions: customActions.value.map(a => {
-        if (a.type === 'send_command') {
-          let content: string;
-          if (a.contentDropdown === '{aiInput}') {
-            content = a.contentAiInputLength ? `{aiInput:${a.contentAiInputLength}}` : '{aiInput}';
-          } else {
-            content = a.contentDropdown === 'custom' ? a.contentCustom : a.contentDropdown;
-          }
-          return { type: 'send_command' as const, content, ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}) };
-        }
-        if (a.type === 'send_contact_message') {
-          let content: string;
-          if (a.contentDropdown === '{aiInput}') {
-            content = a.contentAiInputLength ? `{aiInput:${a.contentAiInputLength}}` : '{aiInput}';
-          } else {
-            content = a.contentDropdown === 'custom' ? a.contentCustom : a.contentDropdown;
-          }
-          return { type: 'send_contact_message' as const, contact: a.contact, content, ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}) };
-        }
-        if (a.type === 'wait_reply') {
-          return {
-            type: 'wait_reply' as const,
-            maxWaitMs: a.maxWaitMs,
-            ...(a.successContains.trim() ? { successContains: a.successContains.trim() } : {}),
-            ...(a.failContains.trim() ? { failContains: a.failContains.trim() } : {}),
-            ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}),
-            ...(a.scope ? { scope: a.scope } : {}),
-          };
-        }
-        if (a.type === 'delay') return { type: 'delay' as const, waitMs: a.waitMs };
-        if (a.type === 'enter_captcha') {
-          const captchaLength = a.captchaLength ? parseInt(a.captchaLength) || undefined : undefined;
-          return { type: 'enter_captcha' as const, maxWaitMs: a.maxWaitMs, captchaLength, ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}) };
-        }
-        if (a.type === 'join_group') return {
-          type: 'join_group' as const,
-          groupId: a.groupId,
-          ...(a.checkMembership ? { checkMembership: true } : {}),
-          ...(a.verifyButton.trim() ? { verifyButton: a.verifyButton.trim(), verifyWaitMs: a.verifyWaitMs } : {}),
-        };
-        if (a.type === 'subscribe_channel') return { type: 'subscribe_channel' as const, channelId: a.channelId, ...(a.checkMembership ? { checkMembership: true } : {}) };
-        if (a.type === 'open_mini_app') return {
-          type: 'open_mini_app' as const,
-          ...(a.contact.trim() ? { contact: a.contact.trim() } : {}),
-          ...(a.button.trim() ? { button: a.button.trim() } : {}),
-          ...(a.appButton.trim() ? { appButtons: a.appButton.split(/->|>/).map(x => x.trim()).filter(Boolean) } : {}),
-          ...(a.successContains.trim() ? { successContains: a.successContains.trim() } : {}),
-          ...(a.failContains.trim() ? { failContains: a.failContains.trim() } : {}),
-          ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}),
-          ...(a.miniAppMaxWaitMs > 0 ? { maxWaitMs: a.miniAppMaxWaitMs } : {}),
-          ...(a.miniAppProxyId ? { proxyId: a.miniAppProxyId } : {}),
-          ...(a.miniAppTryAllProxies ? {} : { tryAllProxies: false }),
-        };
-        if (a.type === 'open_mini_app_url') return {
-          type: 'open_mini_app_url' as const,
-          url: a.url.trim(),
-          ...(a.contact.trim() ? { contact: a.contact.trim() } : {}),
-          ...(a.appButton.trim() ? { appButtons: a.appButton.split(/->|>/).map(x => x.trim()).filter(Boolean) } : {}),
-          ...(a.successContains.trim() ? { successContains: a.successContains.trim() } : {}),
-          ...(a.failContains.trim() ? { failContains: a.failContains.trim() } : {}),
-          ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}),
-          ...(a.miniAppMaxWaitMs > 0 ? { maxWaitMs: a.miniAppMaxWaitMs } : {}),
-          ...(a.miniAppProxyId ? { proxyId: a.miniAppProxyId } : {}),
-          ...(a.miniAppTryAllProxies ? {} : { tryAllProxies: false }),
-        };
-        if (a.type === 'open_bot_menu_app') return {
-          type: 'open_bot_menu_app' as const,
-          ...(a.contact.trim() ? { contact: a.contact.trim() } : {}),
-          ...(a.appButton.trim() ? { appButtons: a.appButton.split(/->|>/).map(x => x.trim()).filter(Boolean) } : {}),
-          ...(a.successContains.trim() ? { successContains: a.successContains.trim() } : {}),
-          ...(a.failContains.trim() ? { failContains: a.failContains.trim() } : {}),
-          ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}),
-          ...(a.miniAppMaxWaitMs > 0 ? { maxWaitMs: a.miniAppMaxWaitMs } : {}),
-          ...(a.miniAppProxyId ? { proxyId: a.miniAppProxyId } : {}),
-          ...(a.miniAppTryAllProxies ? {} : { tryAllProxies: false }),
-        };
-        if (a.type === 'open_url') return {
-          type: 'open_url' as const,
-          url: a.url.trim(),
-          ...(a.webSteps.length ? { steps: webStepsToConfig(a.webSteps) } : {}),
-          ...(a.successContains.trim() ? { successContains: a.successContains.trim() } : {}),
-          ...(a.failContains.trim() ? { failContains: a.failContains.trim() } : {}),
-          ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}),
-          ...(a.miniAppMaxWaitMs > 0 ? { maxWaitMs: a.miniAppMaxWaitMs } : {}),
-          ...(a.miniAppProxyId ? { proxyId: a.miniAppProxyId } : {}),
-          ...(a.miniAppTryAllProxies ? {} : { tryAllProxies: false }),
-        };
-        if (a.type === 'ai_multiple_btn') return {
-          type: 'ai_multiple_btn' as const,
-          gapMs: a.gapMs,
-          maxRetries: a.maxRetries,
-          maxWaitMs: a.maxWaitMs,
-          ...(a.contact.trim() ? { contact: a.contact.trim() } : {}),
-          ...(a.buttonAiHint.trim() ? { hint: a.buttonAiHint.trim() } : {}),
-          ...(a.successContains.trim() ? { successContains: a.successContains.trim() } : {}),
-          ...(a.failContains.trim() ? { failContains: a.failContains.trim() } : {}),
-          ...(a.scope ? { scope: a.scope } : {}),
-        };
-        let button: string;
-        if (a.buttonDropdown === 'custom') button = a.buttonCustom;
-        else if (a.buttonDropdown === '{aiBtn}') button = a.buttonAiHint.trim() ? `{aiBtn:${a.buttonAiHint.trim()}}` : '{aiBtn}';
-        else button = a.buttonDropdown || '签到';
-        if (a.type === 'click_message_button') return {
-          type: 'click_message_button' as const,
-          contact: a.contact,
-          button,
-          maxRetries: a.maxRetries,
-          maxWaitMs: a.maxWaitMs,
-          ...(a.successContains.trim() ? { successContains: a.successContains.trim() } : {}),
-          ...(a.failContains.trim() ? { failContains: a.failContains.trim() } : {}),
-          ...(a.scope ? { scope: a.scope } : {}),
-          ...(a.cfChallenge ? { cfChallenge: true } : {}),
-        };
-        return {
-          type: 'click_button' as const,
-          button,
-          maxRetries: a.maxRetries,
-          maxWaitMs: a.maxWaitMs,
-          ...(a.successContains.trim() ? { successContains: a.successContains.trim() } : {}),
-          ...(a.failContains.trim() ? { failContains: a.failContains.trim() } : {}),
-          ...(a.scope ? { scope: a.scope } : {}),
-          ...(a.cfChallenge ? { cfChallenge: true } : {}),
-        };
-      }),
+      actions: customActions.value.map(actionToConfig),
+      ...(customFinallyActions.value.length
+        ? { finallyActions: customFinallyActions.value.map(actionToConfig) }
+        : {}),
     };
     if (customJobMaxRetries.value > 1) cfg.maxRetries = customJobMaxRetries.value;
-    if (tplProxyId.value) cfg.proxyId = tplProxyId.value;
     return cfg;
   }
   if (form.jobType === 'checkin') {
@@ -1743,7 +1178,7 @@ function openAdd() {
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
   embyUaDropdown.value = '';
   tplProxyId.value = '';
-  customActions.value = [];
+  resetCustomChains();
   customJobMaxRetries.value = 1;
   tplCheckinSuccessContains.value = '';
   tplCheckinFailContains.value = '';
@@ -1812,69 +1247,17 @@ function openEdit(tpl: JobTemplate) {
         const cfg = JSON.parse(tpl.config) as CustomConfig & { proxyId?: string };
         tplProxyId.value = cfg.proxyId ?? '';
         customJobMaxRetries.value = cfg.maxRetries ?? 1;
-        customActions.value = cfg.actions.map((a: CustomAction) => {
-          const base = defaultAction();
-          if (a.type === 'send_command') {
-            const aiInputMatch = a.content.match(/^\{aiInput(?::(\d+))?\}$/);
-            if (aiInputMatch) {
-              return { ...base, type: 'send_command' as const, content: a.content, contentDropdown: '{aiInput}', contentCustom: '', contentAiInputLength: aiInputMatch[1] ?? '', maxRetries: a.maxRetries ?? 0 };
-            }
-            const contentDropdown = ACTION_CMD_PRESETS.has(a.content) ? a.content : 'custom';
-            return { ...base, type: 'send_command' as const, content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 0 };
-          }
-          if (a.type === 'send_contact_message') {
-            const aiInputMatch = a.content.match(/^\{aiInput(?::(\d+))?\}$/);
-            if (aiInputMatch) {
-              return { ...base, type: 'send_contact_message' as const, contact: a.contact, content: a.content, contentDropdown: '{aiInput}', contentCustom: '', contentAiInputLength: aiInputMatch[1] ?? '', maxRetries: a.maxRetries ?? 0 };
-            }
-            const contentDropdown = ACTION_CMD_PRESETS.has(a.content) ? a.content : 'custom';
-            return { ...base, type: 'send_contact_message' as const, contact: a.contact, content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 0 };
-          }
-          if (a.type === 'wait_reply') return { ...base, type: 'wait_reply' as const, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0, scope: a.scope ?? 0 };
-          if (a.type === 'delay') return { ...base, type: 'delay' as const, waitMs: a.waitMs };
-          if (a.type === 'enter_captcha') return { ...base, type: 'enter_captcha' as const, maxWaitMs: a.maxWaitMs, captchaLength: String(a.captchaLength ?? ''), maxRetries: a.maxRetries ?? 0 };
-          if (a.type === 'join_group') return { ...base, type: 'join_group' as const, groupId: a.groupId, checkMembership: a.checkMembership ?? false, verifyButton: a.verifyButton ?? '', verifyWaitMs: a.verifyWaitMs ?? 30000 };
-          if (a.type === 'subscribe_channel') return { ...base, type: 'subscribe_channel' as const, channelId: a.channelId, checkMembership: a.checkMembership ?? false };
-          if (a.type === 'open_mini_app') return { ...base, type: 'open_mini_app' as const, contact: a.contact ?? '', button: a.button ?? '', appButton: (a.appButtons ?? []).join(' > '), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
-          if (a.type === 'open_mini_app_url') return { ...base, type: 'open_mini_app_url' as const, url: a.url ?? '', contact: a.contact ?? '', appButton: (a.appButtons ?? []).join(' > '), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
-          if (a.type === 'open_bot_menu_app') return { ...base, type: 'open_bot_menu_app' as const, contact: a.contact ?? '', appButton: (a.appButtons ?? []).join(' > '), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
-          if (a.type === 'open_url') return { ...base, type: 'open_url' as const, url: a.url ?? '', webSteps: webStepsFromConfig(a.steps), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
-          if (a.type === 'ai_multiple_btn') return { ...base, type: 'ai_multiple_btn' as const, contact: a.contact ?? '', buttonAiHint: a.hint ?? '', gapMs: a.gapMs ?? 1000, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', scope: a.scope ?? 0 };
-          if (a.type === 'click_button') {
-            const aiMatch = a.button.match(/^\{aiBtn(?::(.+))?\}$/);
-            let buttonDropdown: string, buttonCustom = '', buttonAiHint = '';
-            if (aiMatch) {
-              buttonDropdown = '{aiBtn}'; buttonAiHint = aiMatch[1]?.trim() ?? '';
-            } else if (ACTION_BTN_PRESETS.has(a.button)) {
-              buttonDropdown = a.button;
-            } else {
-              buttonDropdown = 'custom'; buttonCustom = a.button;
-            }
-            return { ...base, type: 'click_button' as const, button: a.button, buttonDropdown, buttonCustom, buttonAiHint, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', scope: a.scope ?? 0, cfChallenge: a.cfChallenge ?? false };
-          }
-          if (a.type === 'click_message_button') {
-            const aiMatch = a.button.match(/^\{aiBtn(?::(.+))?\}$/);
-            let buttonDropdown: string, buttonCustom = '', buttonAiHint = '';
-            if (aiMatch) {
-              buttonDropdown = '{aiBtn}'; buttonAiHint = aiMatch[1]?.trim() ?? '';
-            } else if (ACTION_BTN_PRESETS.has(a.button)) {
-              buttonDropdown = a.button;
-            } else {
-              buttonDropdown = 'custom'; buttonCustom = a.button;
-            }
-            return { ...base, type: 'click_message_button' as const, contact: a.contact, button: a.button, buttonDropdown, buttonCustom, buttonAiHint, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', scope: a.scope ?? 0, cfChallenge: a.cfChallenge ?? false };
-          }
-          return base;
-        });
-      } catch { customActions.value = []; customJobMaxRetries.value = 1; }
+        customActions.value = cfg.actions.map(actionFromConfig);
+        customFinallyActions.value = (cfg.finallyActions ?? []).map(actionFromConfig);
+      } catch { resetCustomChains(); customJobMaxRetries.value = 1; }
     } else {
-      customActions.value = [];
+      resetCustomChains();
       customJobMaxRetries.value = 1;
     }
   } else if (tpl.jobType === 'autoreg') {
     Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true, realWatch: false, sequencePlay: false, library: '' });
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
-    customActions.value = [];
+    resetCustomChains();
     Object.assign(autoregCfg, defaultAutoregCfg());
     if (tpl.config) {
       try {
@@ -1909,7 +1292,7 @@ function openEdit(tpl: JobTemplate) {
     // checkin
     Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true, realWatch: false, sequencePlay: false, library: '' });
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
-    customActions.value = [];
+    resetCustomChains();
     tplCheckinSuccessContains.value = '';
     tplCheckinFailContains.value = '';
     if (tpl.config) {
@@ -2321,36 +1704,6 @@ tbody tr:nth-child(even):not(.row-selected) td {
   color: #6366f1;
 }
 
-.custom-action-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  background: #fafafa;
-}
-
-.custom-action-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.custom-action-num {
-  min-width: 20px;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 600;
-  color: #aaa;
-}
-
-.custom-action-type-select {
-  flex: 1;
-}
-
-.custom-action-params {
-  padding-left: 26px;
-}
 
 .action-sheet-backdrop {
   position: fixed;

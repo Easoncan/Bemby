@@ -1,6 +1,6 @@
 services:
   bemby:
-    image: liveinaus/bemby:latest
+    image: ghcr.io/easoncan/bemby:latest
     restart: unless-stopped
     ports:
       - "3000:3000"

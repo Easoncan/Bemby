@@ -2,10 +2,10 @@
   <img src="docs/logo.png" width="200" alt="Bemby" />
 </p>
 
-# Bemby v1.0.0
+# Bemby v1.0.1
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/liveinaus/bemby)](https://hub.docker.com/r/liveinaus/bemby)
-[![更新日志](https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E5%BF%97-%E6%9F%A5%E7%9C%8B-blue)](https://github.com/liveinaus/Bemby/blob/main/CHANGELOG.md)
+[![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Feasoncan%2Fbemby-2496ED?logo=github)](https://github.com/Easoncan/Bemby/pkgs/container/bemby)
+[![更新日志](https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E5%BF%97-%E6%9F%A5%E7%9C%8B-blue)](https://github.com/Easoncan/Bemby/blob/main/CHANGELOG.md)
 [![Telegram](https://img.shields.io/badge/Telegram-%E4%BA%A4%E6%B5%81%E7%BE%A4-2CA5E0?logo=telegram&logoColor=white)](https://t.me/cool_bemby)
 
 [English](#english) | **简体中文**
@@ -109,10 +109,10 @@ docker run -d \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD=changeme \
   -e JWT_SECRET="$(openssl rand -hex 32)" \
-  liveinaus/bemby:latest
+  ghcr.io/easoncan/bemby:latest
 ```
 
-镜像同时发布到 Docker Hub 与 GitHub 容器仓库（GHCR），二者内容一致，可任选其一：`liveinaus/bemby:latest` 或 `ghcr.io/liveinaus/bemby:latest`。
+镜像发布到 GitHub 容器仓库（GHCR）：`ghcr.io/easoncan/bemby:latest`。生产环境建议使用明确版本标签，例如 `ghcr.io/easoncan/bemby:1.0.1`。
 
 > `JWT_SECRET` 为必填项，且不能使用公开的占位值（如 `change-me-in-production`），否则应用将拒绝启动。请用 `openssl rand -hex 32` 生成。
 
@@ -129,7 +129,7 @@ docker run -d \
 
 ### Railway（推荐）
 
-Railway 支持直接从 Docker Hub 镜像部署，无需 Fork 或连接 GitHub。新账户首月赠送 **$5 免费额度**，无需绑定信用卡，之后每月赠送1 美元。
+Railway 可直接从公开 GHCR 镜像部署，无需 Fork 或连接 GitHub。新账户首月赠送 **$5 免费额度**，无需绑定信用卡，之后每月赠送1 美元。
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/bemby?referralCode=o7RbM-&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
@@ -210,7 +210,7 @@ Railway 支持直接从 Docker Hub 镜像部署，无需 Fork 或连接 GitHub�
 **所需工具：** Node.js 20+、Git
 
 ```bash
-git clone https://github.com/liveinaus/Bemby.git
+git clone https://github.com/Easoncan/Bemby.git
 cd Bemby
 ./dev.sh
 ```
@@ -354,7 +354,7 @@ Bemby 仅供个人自动化和学习目的使用。请负责任地使用，并�
 
 ## English
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/liveinaus/bemby)](https://hub.docker.com/r/liveinaus/bemby)
+[![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Feasoncan%2Fbemby-2496ED?logo=github)](https://github.com/Easoncan/Bemby/pkgs/container/bemby)
 [![Changelog](https://img.shields.io/badge/changelog-view-blue)](CHANGELOG.md)
 [![Telegram](https://img.shields.io/badge/Telegram-community-2CA5E0?logo=telegram&logoColor=white)](https://t.me/cool_bemby)
 
@@ -456,10 +456,10 @@ docker run -d \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD=changeme \
   -e JWT_SECRET="$(openssl rand -hex 32)" \
-  liveinaus/bemby:latest
+  ghcr.io/easoncan/bemby:latest
 ```
 
-Images are published to both Docker Hub and the GitHub Container Registry (GHCR) with identical contents; use either `liveinaus/bemby:latest` or `ghcr.io/liveinaus/bemby:latest`.
+Images are published to the GitHub Container Registry (GHCR): `ghcr.io/easoncan/bemby:latest`. For production, use a fixed version tag such as `ghcr.io/easoncan/bemby:1.0.1`.
 
 > `JWT_SECRET` is required and must not be a publicly known placeholder (e.g. `change-me-in-production`), or the app refuses to start. Generate one with `openssl rand -hex 32`.
 
@@ -476,7 +476,7 @@ Not comfortable with the command line or Docker? Deploy Bemby to a cloud platfor
 
 #### Railway *(recommended)*
 
-Railway can deploy directly from the Docker Hub image — no GitHub fork or account connection needed. New accounts get **$5 free credit 1st month** with no credit card required, then you get $1 per month after.
+Railway can deploy directly from the public GHCR image — no GitHub fork or account connection needed. New accounts get **$5 free credit 1st month** with no credit card required, then you get $1 per month after.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/bemby?referralCode=o7RbM-&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
@@ -557,7 +557,7 @@ Go to **Settings** to configure:
 **Requirements:** Node.js 20+, Git
 
 ```bash
-git clone https://github.com/liveinaus/Bemby.git
+git clone https://github.com/Easoncan/Bemby.git
 cd Bemby
 ./dev.sh
 ```

@@ -4,7 +4,7 @@ Bemby is a self-hosted automation tool for managing daily Telegram bot check-ins
 
 ## About Hosting Bemby
 
-Hosting Bemby involves running a persistent Node.js/Express server that maintains active Telegram MTProto connections and a background task scheduler. All data is stored in a SQLite database, so a persistent volume is required to survive restarts. A single container serves the backend API, the Vue 3 web portal, and the scheduler together. Railway provisions the container directly from the official Docker Hub image and exposes it on port 3000. You supply an admin username, password, and a JWT secret at deploy time — everything else is handled automatically.
+Hosting Bemby involves running a persistent Node.js/Express server that maintains active Telegram MTProto connections and a background task scheduler. All data is stored in a SQLite database, so a persistent volume is required to survive restarts. A single container serves the backend API, the Vue 3 web portal, and the scheduler together. Railway provisions the container directly from the GitHub Container Registry image and exposes it on port 3000. You supply an admin username, password, and a JWT secret at deploy time — everything else is handled automatically.
 
 ## Common Use Cases
 
@@ -19,8 +19,8 @@ Hosting Bemby involves running a persistent Node.js/Express server that maintain
 
 ### Deployment Dependencies
 
-- Docker Hub image: [liveinaus/bemby](https://hub.docker.com/r/liveinaus/bemby)
-- Source code: [github.com/liveinaus/Bemby](https://github.com/liveinaus/Bemby)
+- GHCR image: [ghcr.io/easoncan/bemby](https://github.com/Easoncan/Bemby/pkgs/container/bemby)
+- Source code: [github.com/Easoncan/Bemby](https://github.com/Easoncan/Bemby)
 - Telegram API credentials: [my.telegram.org/apps](https://my.telegram.org/apps)
 
 ### Implementation Details

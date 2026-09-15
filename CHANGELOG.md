@@ -4,6 +4,14 @@ All notable changes to Bemby are documented here.
 
 ---
 
+## v1.0.1
+
+自建发行版：镜像改由 GitHub Container Registry 发布至 `ghcr.io/easoncan/bemby`，项目内 GitHub 链接同步为 `Easoncan/Bemby`。自定义任务统一动作与动作链的总执行次数语义：`1` 为仅执行一次，`2` 为最多执行两次，避免外层动作链重试与动作重试叠加放大。
+
+Self-hosted release: images are published to the GitHub Container Registry as `ghcr.io/easoncan/bemby`, and project links now point to `Easoncan/Bemby`. Custom jobs now use one total-execution-count meaning for actions and action chains: `1` executes once and `2` executes at most twice, avoiding multiplied retries from nested action-chain and action retries.
+
+---
+
 ## v1.0.0
 
 第一个 1.0 版本：小程序（Mini App）支持、网页子步骤、注册任务增强、计划列表与批量资料生成，Cloudflare 验证改用 CloakBrowser，并完成一轮安全加固。

@@ -54,7 +54,7 @@ export function defaultAction(): CustomActionForm {
   return {
     type: 'send_command', content: '/start', contentDropdown: '/start', contentCustom: '',
     contentAiInputLength: '', maxWaitMs: 30000, waitMs: 2000, gapMs: 1000, button: '签到',
-    buttonDropdown: '签到', buttonCustom: '', buttonAiHint: '', maxRetries: 3, scope: 0,
+    buttonDropdown: '签到', buttonCustom: '', buttonAiHint: '', maxRetries: 1, scope: 0,
     captchaLength: '', successContains: '', failContains: '', cfChallenge: false, contact: '', groupId: '', checkMembership: false,
     verifyButton: '', verifyWaitMs: 30000, channelId: '', appButton: '',
     miniAppMaxWaitMs: 300000, miniAppProxyId: '', miniAppTryAllProxies: true,
@@ -68,27 +68,27 @@ export function actionFromConfig(a: CustomAction): CustomActionForm {
   const base = defaultAction();
   if (a.type === 'send_command') {
     const aiInputMatch = a.content.match(/^\{aiInput(?::(\d+))?\}$/);
-    if (aiInputMatch) return { ...base, type: 'send_command', content: a.content, contentDropdown: '{aiInput}', contentCustom: '', contentAiInputLength: aiInputMatch[1] ?? '', maxRetries: a.maxRetries ?? 0 };
+    if (aiInputMatch) return { ...base, type: 'send_command', content: a.content, contentDropdown: '{aiInput}', contentCustom: '', contentAiInputLength: aiInputMatch[1] ?? '', maxRetries: a.maxRetries ?? 1 };
     const contentDropdown = CMD_PRESETS.has(a.content) ? a.content : 'custom';
-    return { ...base, type: 'send_command', content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 0 };
+    return { ...base, type: 'send_command', content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 1 };
   }
   if (a.type === 'send_contact_message') {
     const aiInputMatch = a.content.match(/^\{aiInput(?::(\d+))?\}$/);
-    if (aiInputMatch) return { ...base, type: 'send_contact_message', contact: a.contact, content: a.content, contentDropdown: '{aiInput}', contentCustom: '', contentAiInputLength: aiInputMatch[1] ?? '', maxRetries: a.maxRetries ?? 0 };
+    if (aiInputMatch) return { ...base, type: 'send_contact_message', contact: a.contact, content: a.content, contentDropdown: '{aiInput}', contentCustom: '', contentAiInputLength: aiInputMatch[1] ?? '', maxRetries: a.maxRetries ?? 1 };
     const contentDropdown = CMD_PRESETS.has(a.content) ? a.content : 'custom';
-    return { ...base, type: 'send_contact_message', contact: a.contact, content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 0 };
+    return { ...base, type: 'send_contact_message', contact: a.contact, content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 1 };
   }
-  if (a.type === 'wait_reply') return { ...base, type: 'wait_reply', maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0, scope: a.scope ?? 0 };
+  if (a.type === 'wait_reply') return { ...base, type: 'wait_reply', maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 1, scope: a.scope ?? 0 };
   if (a.type === 'delay') return { ...base, type: 'delay', waitMs: a.waitMs };
-  if (a.type === 'enter_captcha') return { ...base, type: 'enter_captcha', maxWaitMs: a.maxWaitMs, captchaLength: String(a.captchaLength ?? ''), maxRetries: a.maxRetries ?? 0 };
+  if (a.type === 'enter_captcha') return { ...base, type: 'enter_captcha', maxWaitMs: a.maxWaitMs, captchaLength: String(a.captchaLength ?? ''), maxRetries: a.maxRetries ?? 1 };
   if (a.type === 'join_group') return { ...base, type: 'join_group', groupId: a.groupId, checkMembership: a.checkMembership ?? false, verifyButton: a.verifyButton ?? '', verifyWaitMs: a.verifyWaitMs ?? 30000 };
   if (a.type === 'subscribe_channel') return { ...base, type: 'subscribe_channel', channelId: a.channelId, checkMembership: a.checkMembership ?? false };
-  if (a.type === 'update_profile') return { ...base, type: 'update_profile', profileAbout: a.about ?? '', maxRetries: a.maxRetries ?? 0 };
-  if (a.type === 'open_mini_app') return { ...base, type: 'open_mini_app', contact: a.contact ?? '', button: a.button ?? '', appButton: (a.appButtons ?? []).join(' > '), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
-  if (a.type === 'open_mini_app_url') return { ...base, type: 'open_mini_app_url', url: a.url ?? '', contact: a.contact ?? '', appButton: (a.appButtons ?? []).join(' > '), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
-  if (a.type === 'open_bot_menu_app') return { ...base, type: 'open_bot_menu_app', contact: a.contact ?? '', appButton: (a.appButtons ?? []).join(' > '), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
-  if (a.type === 'open_url') return { ...base, type: 'open_url', url: a.url ?? '', webSteps: webStepsFromConfig(a.steps), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
-  if (a.type === 'ai_multiple_btn') return { ...base, type: 'ai_multiple_btn', contact: a.contact ?? '', buttonAiHint: a.hint ?? '', gapMs: a.gapMs ?? 1000, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', scope: a.scope ?? 0 };
+  if (a.type === 'update_profile') return { ...base, type: 'update_profile', profileAbout: a.about ?? '', maxRetries: a.maxRetries ?? 1 };
+  if (a.type === 'open_mini_app') return { ...base, type: 'open_mini_app', contact: a.contact ?? '', button: a.button ?? '', appButton: (a.appButtons ?? []).join(' > '), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 1, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
+  if (a.type === 'open_mini_app_url') return { ...base, type: 'open_mini_app_url', url: a.url ?? '', contact: a.contact ?? '', appButton: (a.appButtons ?? []).join(' > '), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 1, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
+  if (a.type === 'open_bot_menu_app') return { ...base, type: 'open_bot_menu_app', contact: a.contact ?? '', appButton: (a.appButtons ?? []).join(' > '), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 1, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
+  if (a.type === 'open_url') return { ...base, type: 'open_url', url: a.url ?? '', webSteps: webStepsFromConfig(a.steps), successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 1, miniAppMaxWaitMs: a.maxWaitMs ?? 0, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
+  if (a.type === 'ai_multiple_btn') return { ...base, type: 'ai_multiple_btn', contact: a.contact ?? '', buttonAiHint: a.hint ?? '', gapMs: a.gapMs ?? 1000, maxRetries: a.maxRetries ?? 1, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', scope: a.scope ?? 0 };
   if (a.type === 'click_button' || a.type === 'click_message_button') {
     const aiMatch = a.button.match(/^\{aiBtn(?::(.+))?\}$/);
     let buttonDropdown: string;
@@ -97,7 +97,7 @@ export function actionFromConfig(a: CustomAction): CustomActionForm {
     if (aiMatch) { buttonDropdown = '{aiBtn}'; buttonAiHint = aiMatch[1]?.trim() ?? ''; }
     else if (BTN_PRESETS.has(a.button)) { buttonDropdown = a.button; }
     else { buttonDropdown = 'custom'; buttonCustom = a.button; }
-    const shared = { ...base, button: a.button, buttonDropdown, buttonCustom, buttonAiHint, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', scope: a.scope ?? 0, cfChallenge: a.cfChallenge ?? false };
+    const shared = { ...base, button: a.button, buttonDropdown, buttonCustom, buttonAiHint, maxRetries: a.maxRetries ?? 1, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', scope: a.scope ?? 0, cfChallenge: a.cfChallenge ?? false };
     if (a.type === 'click_button') return { ...shared, type: 'click_button' };
     return { ...shared, type: 'click_message_button', contact: a.contact };
   }

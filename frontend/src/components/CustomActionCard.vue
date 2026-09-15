@@ -47,7 +47,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-          <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+          <input v-model.number="action.maxRetries" class="form-input" type="number" min="1" max="10" />
         </div>
       </div>
     </div>
@@ -78,7 +78,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-          <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+          <input v-model.number="action.maxRetries" class="form-input" type="number" min="1" max="10" />
         </div>
       </div>
     </div>
@@ -92,7 +92,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-          <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+          <input v-model.number="action.maxRetries" class="form-input" type="number" min="1" max="10" />
         </div>
       </div>
       <div class="form-group" style="margin-bottom:0">
@@ -139,7 +139,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-          <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+          <input v-model.number="action.maxRetries" class="form-input" type="number" min="1" max="10" />
         </div>
       </div>
       <div class="form-group" style="margin-bottom:0">
@@ -197,7 +197,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-          <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+          <input v-model.number="action.maxRetries" class="form-input" type="number" min="1" max="10" />
         </div>
       </div>
       <div class="form-group" style="margin-bottom:0">
@@ -251,7 +251,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-          <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+          <input v-model.number="action.maxRetries" class="form-input" type="number" min="1" max="10" />
         </div>
       </div>
       <div class="form-group" style="margin-bottom:0">
@@ -295,7 +295,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-          <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+          <input v-model.number="action.maxRetries" class="form-input" type="number" min="1" max="10" />
         </div>
       </div>
       <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiInputLengthHint') }}</div>
@@ -378,7 +378,7 @@
       <div class="form-row" style="margin-bottom:0;margin-top:8px">
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-          <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+          <input v-model.number="action.maxRetries" class="form-input" type="number" min="1" max="10" />
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMiniAppMaxWait') }}</label>
@@ -427,7 +427,7 @@
       <div class="form-row" style="margin-bottom:0;margin-top:8px">
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-          <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+          <input v-model.number="action.maxRetries" class="form-input" type="number" min="1" max="10" />
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMiniAppMaxWait') }}</label>
@@ -463,7 +463,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
-          <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+          <input v-model.number="action.maxRetries" class="form-input" type="number" min="1" max="10" />
         </div>
       </div>
     </div>

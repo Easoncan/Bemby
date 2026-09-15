@@ -1162,9 +1162,9 @@
             </table>
             <p class="help-para">
               <strong>任务最大重试次数</strong
-              >——自定义任务专属设置（独立于全局任务重试），失败时从头重新执行整个动作链。
+              >——填写动作链的总执行次数：<code>1</code> 表示只执行一次，<code>2</code> 表示最多执行两次；失败时从头重新执行整个动作链。
               <strong>动作最大重试次数</strong
-              >——每个动作仅重试自身，不影响其他步骤。
+              >——填写该动作的总执行次数：<code>1</code> 表示只执行一次，<code>2</code> 表示最多执行两次；只重试自身，不影响其他步骤。
             </p>
             <p class="help-note">
               需要在<strong>设置</strong>页面配置 AI API 密钥，方可使用
@@ -1614,10 +1614,11 @@
             </table>
             <p class="help-para">
               <strong>Job max retries</strong> -- a per-custom-job setting
-              (separate from the global job retry) that reruns the entire action
-              chain from the beginning on failure.
+              (separate from the global job retry) that sets the total number of
+              chain executions: 1 runs once, 2 runs at most twice.
               <strong>Action max retries</strong> -- each action retries only
-              itself on failure; the rest of the chain is unaffected.
+              itself on failure, with the value also meaning total executions:
+              1 runs once, 2 runs at most twice; the rest of the chain is unaffected.
             </p>
             <p class="help-note">
               An AI API key must be configured in

@@ -167,6 +167,7 @@ describe("runJob — checkin", () => {
 
 describe("runJob — custom", () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.useRealTimers());
 
   it("records the returned log on success", async () => {
     const customLog = { steps: [] };
@@ -188,6 +189,20 @@ describe("runJob — custom", () => {
     await expect(runJob(job, makeAccount(), logs)).rejects.toThrow("fail");
     expect(logs).toHaveLength(1);
     expect(logs[0]).toBe(errorLog);
+  });
+
+  it("does not apply the generic job retry around the custom chain", async () => {
+    vi.useFakeTimers();
+    vi.mocked(runCustom).mockRejectedValue(new Error("chain failed"));
+    const promise = runJob(
+      { ...makeJob("custom", 5), config: '{"actions":[]}' },
+      makeAccount(),
+      [],
+    );
+    const assertion = expect(promise).rejects.toThrow("chain failed");
+    await vi.runAllTimersAsync();
+    await assertion;
+    expect(vi.mocked(runCustom)).toHaveBeenCalledTimes(1);
   });
 
   it("throws immediately when no account is linked", async () => {

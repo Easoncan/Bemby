@@ -800,16 +800,21 @@ export async function runCustom(
 
         const action = actions[i];
 
-        const actionMaxRetries =
+        // The configured value is the total number of executions. Keep old `0` values
+        // runnable as one execution instead of turning them into a no-op.
+        const configuredActionAttempts =
           action.type !== "delay" && "maxRetries" in action
-            ? (action.maxRetries ?? 0)
-            : 0;
+            ? Number(action.maxRetries ?? 1)
+            : 1;
+        const actionMaxAttempts = Number.isFinite(configuredActionAttempts)
+          ? Math.max(1, Math.floor(configuredActionAttempts))
+          : 1;
 
         let actionSucceeded = false;
 
         for (
           let actionAttempt = 1;
-          actionAttempt <= actionMaxRetries + 1 && !actionSucceeded;
+          actionAttempt <= actionMaxAttempts && !actionSucceeded;
           actionAttempt++
         ) {
           const step: CustomStepLog = {
@@ -820,7 +825,7 @@ export async function runCustom(
             // A cleanup step is numbered within its own group, so the job attempt that carried
             // it says nothing -- and would only read as a retry that never happened.
             ...(pass === "chain" && jobMaxRetries > 1 ? { jobAttempt } : {}),
-            ...(actionMaxRetries > 0 ? { actionAttempt } : {}),
+            ...(actionMaxAttempts > 1 ? { actionAttempt } : {}),
           };
           // Cleanup steps are written down like the chain's and tagged, so the report reads as
           // two groups: what failed in there is worth seeing even though it cannot change how
@@ -1480,7 +1485,7 @@ export async function runCustom(
 
                 if (!clicked)
                   throw new Error(
-                    `Button "${targetText!}" not found after ${action.maxRetries + 1} attempt(s)`,
+                    `Button "${targetText!}" not found after ${actionMaxAttempts} attempt(s)`,
                   );
                 break;
               }
@@ -1853,7 +1858,7 @@ export async function runCustom(
 
                 if (!clicked)
                   throw new Error(
-                    `Button "${targetText!}" not found after ${action.maxRetries + 1} attempt(s)`,
+                    `Button "${targetText!}" not found after ${actionMaxAttempts} attempt(s)`,
                   );
                 break;
               }
@@ -2209,7 +2214,7 @@ export async function runCustom(
 
                   if (!clicked)
                     throw new Error(
-                      `Button "${targetText}" not found after ${action.maxRetries + 1} attempt(s)`,
+                      `Button "${targetText}" not found after ${actionMaxAttempts} attempt(s)`,
                     );
                   return { clickedText, responseText };
                 };
@@ -2878,7 +2883,7 @@ export async function runCustom(
             if (err?.aiResponse != null && step.aiResponse == null)
               step.aiResponse = err.aiResponse;
 
-            if (actionAttempt > actionMaxRetries) {
+            if (actionAttempt >= actionMaxAttempts) {
               // All action retries exhausted. In a cleanup pass the step is logged with the
               // error it ended on, but that is as far as it goes: the run keeps the verdict the
               // chain earned. What could not be undone is visible in the report, not silent.

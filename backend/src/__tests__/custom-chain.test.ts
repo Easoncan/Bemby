@@ -278,6 +278,42 @@ describe('custom action — update_profile', () => {
     expect(mockInvoke.mock.calls[0][0].args).toMatchObject({ about: '' });
   });
 
+  it('treats maxRetries as total executions, with 1 meaning no retry', async () => {
+    mockInvoke.mockRejectedValue(new Error('profile update failed'));
+
+    const { steps, error } = await outcome([
+      clearingBio({ maxRetries: 1 }),
+    ]);
+
+    expect((error as Error)?.message).toContain('profile update failed');
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(steps.filter((s) => s.actionType === 'update_profile')).toHaveLength(1);
+  });
+
+  it('retries an action only up to its configured total executions', async () => {
+    mockInvoke.mockRejectedValueOnce(new Error('first attempt failed'));
+
+    const { steps, error } = await outcome([
+      clearingBio({ maxRetries: 2 }),
+    ]);
+
+    expect(error).toBeNull();
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
+    expect(steps.filter((s) => s.actionType === 'update_profile')).toHaveLength(2);
+  });
+
+  it('keeps legacy maxRetries=0 configurations runnable as one execution', async () => {
+    mockInvoke.mockRejectedValue(new Error('profile update failed'));
+
+    const { steps, error } = await outcome([
+      clearingBio({ maxRetries: 0 }),
+    ]);
+
+    expect((error as Error)?.message).toContain('profile update failed');
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(steps.filter((s) => s.actionType === 'update_profile')).toHaveLength(1);
+  });
+
   it('refuses a bio Telegram would reject rather than sending it', async () => {
     const { steps } = await outcome([{ type: 'update_profile', about: 'x'.repeat(141) }]);
 

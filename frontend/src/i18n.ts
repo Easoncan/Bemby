@@ -720,7 +720,7 @@ const zh = {
       labelButton: "按钮文字",
       buttonHint:
         "支持特殊值：{anyBtn} 随机，{aiBtn} AI 识别，{aiBtn:提示} 带提示的 AI 识别",
-      labelMaxRetries: "最大重试次数",
+      labelMaxRetries: "最大执行次数",
       labelScope: "消息范围",
       scopeHint:
         "限定查找哪些消息。0（默认）只看发送命令之后的新回复；-1 表示额外包含发送前最近 1 条消息，-3 表示最近 3 条。用于避免点到发送命令前的旧按钮",
@@ -733,7 +733,7 @@ const zh = {
         "收到含该文字的回复时标记成功，留空则任意回复均视为成功",
       failContainsHint: "收到含该文字的回复时标记失败，留空则不按文字判断",
       labelJobMaxRetries: "任务最大重试次数",
-      jobMaxRetriesHint: "整个动作链失败后的重试次数，1 表示不重试",
+      jobMaxRetriesHint: "填写总执行次数：1 = 只执行一次，2 = 最多执行两次",
       labelContact: "联系人（机器人 / 群组 / 用户）",
       contactPlaceholder: "例：@botname、@groupname 或 -1001234567890",
       contactHint: "查看该联系人最近收到的消息（或等待新消息）中的按钮并点击。没有用户名的私密群组可填 ID（在 Messenger 的资料面板复制）",
@@ -2132,7 +2132,7 @@ const en: typeof zh = {
       labelWaitMs: "Wait duration (ms)",
       labelButton: "Button text",
       buttonHint: "Special values: {anyBtn} random, {aiBtn} AI pick",
-      labelMaxRetries: "Max retries",
+      labelMaxRetries: "Max executions",
       labelScope: "Message scope",
       scopeHint:
         "Limits which messages are considered. 0 (default) only looks at new replies after the command was sent; -1 also includes the last 1 message before it, -3 the last 3. Use this to avoid clicking a stale button from before the command",
@@ -2147,7 +2147,7 @@ const en: typeof zh = {
         "Marks action failed when reply contains this text; leave empty for no text-based failure",
       labelJobMaxRetries: "Job max retries",
       jobMaxRetriesHint:
-        "How many times to retry the whole action chain on failure; 1 means no retry",
+        "Enter total executions: 1 = run once, 2 = run at most twice",
       labelContact: "Contact (bot / group / user)",
       contactPlaceholder: "e.g. @botname, @groupname or -1001234567890",
       contactHint: "Looks for a button on this contact's latest received message (or waits for a new one) and clicks it. A private group with no username is named by its ID, copied from the Info panel in Messenger",

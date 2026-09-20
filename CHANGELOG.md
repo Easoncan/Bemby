@@ -4,6 +4,14 @@ All notable changes to Bemby are documented here.
 
 ---
 
+## v1.0.2
+
+新增飞书（Feishu）自定义机器人作为第二个通知通道：在设置中填入机器人的 Webhook 地址与可选的签名校验密钥后，任务结束通知会同时推送到 Telegram 与飞书。两个通道相互独立，任一通道发送失败只作记录，不影响另一个通道，也不会影响任务本身。Webhook 地址仅以掩码回显（隐藏 hook id），签名密钥保存后永不下发，可随时发送测试消息验证配置是否可用。
+
+Added Feishu custom bots as a second notification channel: after entering the bot's webhook URL and optional signing secret in Settings, job-completion notifications are delivered to Telegram and Feishu at the same time. The two channels are independent — a failure in one is only logged and does not affect the other or the job itself. The webhook is echoed back masked (hiding the hook id), the signing secret is never returned once saved, and a test message can be sent at any time to verify the setup.
+
+---
+
 ## v1.0.1
 
 自建发行版：镜像改由 GitHub Container Registry 发布至 `ghcr.io/easoncan/bemby`，项目内 GitHub 链接同步为 `Easoncan/Bemby`。自定义任务统一动作与动作链的总执行次数语义：`1` 为仅执行一次，`2` 为最多执行两次，避免外层动作链重试与动作重试叠加放大。

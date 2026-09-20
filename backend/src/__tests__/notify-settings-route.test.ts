@@ -88,6 +88,31 @@ describe("notification bot settings", () => {
     expect(ALLOWED_KEYS).toContain("notify_bot_target");
   });
 
+  it("accepts the Feishu webhook and secret as settings keys", () => {
+    expect(ALLOWED_KEYS).toContain("notify_feishu_webhook");
+    expect(ALLOWED_KEYS).toContain("notify_feishu_secret");
+  });
+
+  it("never sends the Feishu webhook id or secret to the client", () => {
+    expect(CLIENT_HIDDEN_KEYS.has("notify_feishu_webhook")).toBe(true);
+    expect(CLIENT_HIDDEN_KEYS.has("notify_feishu_secret")).toBe(true);
+  });
+
+  it("reports Feishu configuration state without exposing the secret", () => {
+    storedSettings({
+      notify_feishu_webhook: "https://open.feishu.cn/open-apis/bot/v2/hook/abc",
+      notify_feishu_secret: "sec",
+    });
+    const res = makeRes();
+    getSettings({}, res);
+
+    expect(res.body.notify_feishu_configured).toBe("true");
+    expect(res.body.notify_feishu_secret_configured).toBe("true");
+    expect(res.body.notify_feishu_webhook).toBeUndefined();
+    expect(res.body.notify_feishu_secret).toBeUndefined();
+    expect(res.body.notify_feishu_webhook_masked).toContain("****");
+  });
+
   it("never sends the raw token to the client, only a mask and a flag", () => {
     storedSettings({ notify_bot_token: TOKEN, notify_bot_target: "42" });
     const res = makeRes();

@@ -252,6 +252,82 @@
         </div>
       </div>
 
+      <!-- Feishu Notifications -->
+      <div class="card s-col-4">
+        <div class="card-body">
+          <div class="card-section-title">
+            {{ t("settings.feishuSection") }}
+          </div>
+          <p style="font-size: 12px; color: #888; margin: 0 0 12px">
+            {{ t("settings.feishuHint") }}
+          </p>
+
+          <div v-if="feishuMsg" class="success-msg">{{ feishuMsg }}</div>
+          <div v-if="feishuError" class="error-msg">{{ feishuError }}</div>
+
+          <div class="form-group">
+            <label class="form-label">{{ t("settings.labelFeishuWebhook") }}</label>
+            <input
+              v-model.trim="notifyForm.feishuWebhook"
+              class="form-input"
+              autocomplete="off"
+              :placeholder="feishuWebhookMasked || t('settings.feishuWebhookPlaceholder')"
+            />
+            <p style="font-size: 12px; color: #888; margin: 4px 0 0">
+              {{ t("settings.feishuWebhookHint") }}
+            </p>
+            <p
+              v-if="feishuConfigured"
+              style="font-size: 12px; margin: 4px 0 0; color: #2e9e5b"
+            >
+              <i class="fa-solid fa-circle-check"></i>
+              {{ t("settings.feishuConfigured") }}
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">{{ t("settings.labelFeishuSecret") }}</label>
+            <input
+              v-model.trim="notifyForm.feishuSecret"
+              class="form-input"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="
+                feishuSecretConfigured
+                  ? t('settings.feishuSecretPlaceholderSet')
+                  : t('settings.feishuSecretPlaceholder')
+              "
+            />
+            <p style="font-size: 12px; color: #888; margin: 4px 0 0">
+              {{ t("settings.feishuSecretHint") }}
+            </p>
+          </div>
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <button
+              class="btn btn-primary"
+              :disabled="notifySaving"
+              @click="saveNotify"
+            >
+              <i class="fa-solid fa-floppy-disk"></i>
+              {{ notifySaving ? t("common.saving") : t("settings.saveBtn") }}
+            </button>
+            <button
+              class="btn btn-ghost"
+              :disabled="feishuTesting || notifySaving"
+              @click="testFeishuNotify"
+            >
+              <i class="fa-solid fa-paper-plane"></i>
+              {{
+                feishuTesting
+                  ? t("settings.feishuTesting")
+                  : t("settings.feishuTestBtn")
+              }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Cloudflare solver -->
       <div class="card s-col-4">
         <div class="card-body">
@@ -2045,6 +2121,8 @@ const notifyForm = reactive({
   botTarget: "",
   username: "",
   events: ["failed"] as string[],
+  feishuWebhook: "",
+  feishuSecret: "",
 });
 const notifySaving = ref(false);
 const notifyMsg = ref("");
@@ -2054,6 +2132,14 @@ const notifyTesting = ref(false);
 // leaving the field blank keeps whatever is stored.
 const notifyBotTokenMasked = ref("");
 const notifyBot = ref<NotifyBotInfo>({ configured: false });
+// Feishu custom bot: the webhook/secret are write-only, so the form fields start blank and
+// these flags/masks carry what the server reported.
+const feishuWebhookMasked = ref("");
+const feishuConfigured = ref(false);
+const feishuSecretConfigured = ref(false);
+const feishuMsg = ref("");
+const feishuError = ref("");
+const feishuTesting = ref(false);
 const notifyChats = ref<NotifyBotChat[]>([]);
 const notifyChatsLoading = ref(false);
 const notifyChatsHint = ref("");
@@ -2859,6 +2945,9 @@ onMounted(async () => {
     notifyForm.username = s.notify_tg_username ?? "";
     notifyForm.botTarget = s.notify_bot_target ?? "";
     notifyBotTokenMasked.value = s.notify_bot_token_masked ?? "";
+    feishuWebhookMasked.value = s.notify_feishu_webhook_masked ?? "";
+    feishuConfigured.value = s.notify_feishu_configured === "true";
+    feishuSecretConfigured.value = s.notify_feishu_secret_configured === "true";
     try {
       if (s.notify_tg_events)
         notifyForm.events = JSON.parse(s.notify_tg_events);
@@ -3295,13 +3384,28 @@ async function saveNotify() {
       // Blank leaves the stored token alone, so an operator can edit the target
       // without retyping the token
       ...(notifyForm.botToken ? { notify_bot_token: notifyForm.botToken } : {}),
+      // Feishu webhook + secret: blank leaves the stored value alone, so either can be
+      // changed independently of the other without retyping both.
+      ...(notifyForm.feishuWebhook
+        ? { notify_feishu_webhook: notifyForm.feishuWebhook }
+        : {}),
+      ...(notifyForm.feishuSecret
+        ? { notify_feishu_secret: notifyForm.feishuSecret }
+        : {}),
     });
     notifyForm.botToken = "";
     notifyBotTokenMasked.value = s.notify_bot_token_masked ?? "";
+    notifyForm.feishuWebhook = "";
+    notifyForm.feishuSecret = "";
+    feishuWebhookMasked.value = s.notify_feishu_webhook_masked ?? "";
+    feishuConfigured.value = s.notify_feishu_configured === "true";
+    feishuSecretConfigured.value = s.notify_feishu_secret_configured === "true";
     notifyMsg.value = t("settings.saved");
+    feishuMsg.value = t("settings.saved");
     await loadNotifyBot(s.notify_bot_configured === "true");
   } catch (err: any) {
     notifyError.value = err.response?.data?.error ?? t("settings.saveFailed");
+    feishuError.value = err.response?.data?.error ?? t("settings.saveFailed");
   } finally {
     notifySaving.value = false;
   }
@@ -3355,6 +3459,26 @@ async function testNotifyBot() {
       err.response?.data?.error ?? t("settings.notifyTestFailed");
   } finally {
     notifyTesting.value = false;
+  }
+}
+
+/** Sends a real message to the Feishu custom bot: proves the webhook + secret path works. */
+async function testFeishuNotify() {
+  feishuMsg.value = "";
+  feishuError.value = "";
+  feishuTesting.value = true;
+  try {
+    // Whatever is in the fields right now, saved or not
+    await settingsApi.testFeishuNotify(
+      notifyForm.feishuWebhook || undefined,
+      notifyForm.feishuSecret || undefined,
+    );
+    feishuMsg.value = t("settings.feishuTestSent");
+  } catch (err: any) {
+    feishuError.value =
+      err.response?.data?.error ?? t("settings.feishuTestFailed");
+  } finally {
+    feishuTesting.value = false;
   }
 }
 

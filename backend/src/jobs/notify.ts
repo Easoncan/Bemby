@@ -2,6 +2,7 @@ import { TelegramClient, Logger } from "telegram";
 import { LogLevel } from "telegram/extensions/Logger";
 import { StringSession } from "telegram/sessions";
 import { fetch as undiciFetch } from "undici";
+import { createHmac } from "node:crypto";
 import type { TgAccount } from "../types";
 import { db } from "../db/database";
 
@@ -18,10 +19,16 @@ export type NotifyConfig = {
    */
   username: string | null;
   events: string[];
+  /** Feishu custom bot webhook URL (open.feishu.cn/open-apis/bot/v2/hook/...). */
+  feishuWebhook: string | null;
+  /** Feishu custom bot signing secret; only needed when the bot enables signature verification. */
+  feishuSecret: string | null;
 };
 
 export const NOTIFY_BOT_TOKEN_KEY = "notify_bot_token";
 export const NOTIFY_BOT_TARGET_KEY = "notify_bot_target";
+export const NOTIFY_FEISHU_WEBHOOK_KEY = "notify_feishu_webhook";
+export const NOTIFY_FEISHU_SECRET_KEY = "notify_feishu_secret";
 
 const BOT_API = "https://api.telegram.org";
 
@@ -56,7 +63,8 @@ export function getNotifyConfig(): NotifyConfig {
   const rows = db
     .prepare(
       `SELECT key, value FROM settings
-       WHERE key IN ('notify_tg_username', 'notify_tg_events', 'notify_bot_token', 'notify_bot_target')`,
+       WHERE key IN ('notify_tg_username', 'notify_tg_events', 'notify_bot_token', 'notify_bot_target',
+                     '${NOTIFY_FEISHU_WEBHOOK_KEY}', '${NOTIFY_FEISHU_SECRET_KEY}')`,
     )
     .all() as { key: string; value: string }[];
   const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -68,12 +76,29 @@ export function getNotifyConfig(): NotifyConfig {
   }
   const raw = map.notify_tg_username?.trim();
   const botTarget = map[NOTIFY_BOT_TARGET_KEY]?.trim();
+  const feishuWebhook = map[NOTIFY_FEISHU_WEBHOOK_KEY]?.trim() || null;
+  const feishuSecret = map[NOTIFY_FEISHU_SECRET_KEY]?.trim() || null;
   return {
     botToken: map[NOTIFY_BOT_TOKEN_KEY]?.trim() || null,
     botTarget: botTarget ? normaliseBotTarget(botTarget) : null,
     username: raw ? normaliseNotifyTarget(raw) : null,
     events,
+    feishuWebhook,
+    feishuSecret,
   };
+}
+
+/** Masks a Feishu webhook down to its host + a trailing ****, so the operator can tell it
+ *  is set without the hook id (which is effectively a password) leaking into the response. */
+export function maskFeishuWebhook(url: string): string {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/");
+    if (parts.length) parts[parts.length - 1] = "****";
+    return `${u.origin}${parts.join("/")}`;
+  } catch {
+    return "https://open.feishu.cn/.../hook/****";
+  }
 }
 
 /** Returns the last 4 chars of a bot token behind its public numeric id: 12345678:****wXyZ. */
@@ -181,6 +206,64 @@ export async function sendBotNotify(
 }
 
 /**
+ * Signs a Feishu custom-bot request when a secret is set. Feishu concatenates the current
+ * second-level timestamp and the secret with a newline, then expects base64(HMAC-SHA256 of
+ * that string, keyed by the same string) as `sign`. With no secret the fields are omitted and
+ * the bot must have signature verification turned off.
+ */
+function feishuSignature(secret: string): { timestamp: string; sign: string } {
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const stringToSign = `${timestamp}\n${secret}`;
+  const sign = createHmac("sha256", stringToSign).update("").digest("base64");
+  return { timestamp, sign };
+}
+
+/**
+ * Posts a text message to a Feishu custom bot webhook. Throws with Feishu's own error text
+ * on a non-zero `code` or a transport failure, so callers can catch and report it.
+ */
+export async function sendFeishuNotify(
+  webhook: string,
+  secret: string | null,
+  message: string,
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    msg_type: "text",
+    content: { text: message },
+  };
+  if (secret) {
+    const { timestamp, sign } = feishuSignature(secret);
+    body.timestamp = timestamp;
+    body.sign = sign;
+  }
+  try {
+    const res = await undiciFetch(webhook, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
+    });
+    // Feishu always answers with HTTP 200 and signals outcome via `code` in the body: 0 means
+    // success, anything else is an error. A body that is not JSON (proxy error page, etc.) is
+    // treated as failure rather than a silent success.
+    let json: { code?: number; msg?: string; StatusMessage?: string };
+    try {
+      json = (await res.json()) as typeof json;
+    } catch {
+      json = {};
+    }
+    if (json.code === undefined) {
+      throw new Error(`Feishu returned no result (HTTP ${res.status})`);
+    }
+    if (json.code !== 0) {
+      throw new Error(json.msg || json.StatusMessage || `Feishu error ${json.code}`);
+    }
+  } catch (err: unknown) {
+    throw new Error(err instanceof Error ? err.message : String(err));
+  }
+}
+
+/**
  * Sends a notification via the given account's session.
  * target defaults to 'me' (Saved Messages).
  * Fire-and-forget -- callers should .catch() any rejection.
@@ -239,25 +322,33 @@ export async function notifyJobEvent(
   const cfg = getNotifyConfig();
   if (!cfg.events.includes(event)) return;
 
+  // Telegram channel: the bot is preferred; the account session is a deprecated fallback.
   if (cfg.botToken) {
     const chat = target?.trim() || cfg.botTarget;
-    if (!chat) return;
-    await sendBotNotify(cfg.botToken, chat, message).catch((e) =>
-      console.warn("[notify] bot notification failed:", e),
-    );
-    return;
+    if (chat) {
+      await sendBotNotify(cfg.botToken, chat, message).catch((e) =>
+        console.warn("[notify] bot notification failed:", e),
+      );
+    }
+  } else if (account?.sessionString) {
+    const legacyTarget = target?.trim() || cfg.username;
+    if (legacyTarget || event === "failed") {
+      console.warn(
+        "[notify] sending as the account is deprecated and will be removed in a future release -- set a notification bot token in Settings",
+      );
+      await sendTgNotify(account, message, legacyTarget ?? "me").catch((e) =>
+        console.warn("[notify] TG notification failed:", e),
+      );
+    }
   }
 
-  // Deprecated sender. A failure still went to Saved Messages when no target was set.
-  if (!account?.sessionString) return;
-  const legacyTarget = target?.trim() || cfg.username;
-  if (!legacyTarget && event !== "failed") return;
-  console.warn(
-    "[notify] sending as the account is deprecated and will be removed in a future release -- set a notification bot token in Settings",
-  );
-  await sendTgNotify(account, message, legacyTarget ?? "me").catch((e) =>
-    console.warn("[notify] TG notification failed:", e),
-  );
+  // Feishu channel: an independent second destination. Both platforms get the same push when
+  // each is configured; a Feishu failure must not affect the run or the Telegram send.
+  if (cfg.feishuWebhook) {
+    await sendFeishuNotify(cfg.feishuWebhook, cfg.feishuSecret, message).catch((e) =>
+      console.warn("[notify] feishu notification failed:", e),
+    );
+  }
 }
 
 export function buildFailureMessage(

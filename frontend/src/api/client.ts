@@ -1176,6 +1176,12 @@ export type Settings = {
   notify_bot_configured?: string;
   /** Server-computed: the stored token as 12345678:****wXyZ. Never the raw value. */
   notify_bot_token_masked?: string;
+  /** Server-computed: "true" when a Feishu webhook is stored. */
+  notify_feishu_configured?: string;
+  /** Server-computed: the stored webhook masked to its host. Never the raw value. */
+  notify_feishu_webhook_masked?: string;
+  /** Server-computed: "true" when a Feishu signing secret is stored. */
+  notify_feishu_secret_configured?: string;
   ua_presets: string;
   proxies: string;
   tg_app_clients: string;
@@ -1345,6 +1351,17 @@ export const settingsApi = {
       .post<{ ok: boolean; error?: string }>("/settings/notify/bot/test", {
         ...(target ? { target } : {}),
         ...(token ? { token } : {}),
+      })
+      .then((r) => r.data),
+  /**
+   * Sends a real message to the configured Feishu custom bot. An unsaved webhook or secret
+   * can be passed to try it before committing to it.
+   */
+  testFeishuNotify: (webhook?: string, secret?: string) =>
+    api
+      .post<{ ok: boolean; error?: string }>("/settings/notify/feishu/test", {
+        ...(webhook ? { webhook } : {}),
+        ...(secret ? { secret } : {}),
       })
       .then((r) => r.data),
 };

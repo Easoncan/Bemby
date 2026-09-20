@@ -28,14 +28,17 @@ vi.mock("telegram/extensions/Logger", () => ({ LogLevel: { NONE: 0 } }));
 vi.mock("telegram/sessions", () => ({ StringSession: vi.fn() }));
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHmac } from "node:crypto";
 import {
   normaliseNotifyTarget,
   normaliseBotTarget,
   maskBotToken,
+  maskFeishuWebhook,
   getNotifyConfig,
   notifyJobEvent,
   recentBotChats,
   sendBotNotify,
+  sendFeishuNotify,
   buildFailureMessage,
   buildSuccessMessage,
 } from "../jobs/notify";
@@ -137,6 +140,8 @@ describe("getNotifyConfig", () => {
       botTarget: null,
       username: null,
       events: ["failed"],
+      feishuWebhook: null,
+      feishuSecret: null,
     });
   });
 
@@ -151,7 +156,18 @@ describe("getNotifyConfig", () => {
       botTarget: "@mychannel",
       username: null,
       events: ["failed", "success"],
+      feishuWebhook: null,
+      feishuSecret: null,
     });
+  });
+
+  it("reads the Feishu webhook and secret when present", () => {
+    settingRows = [
+      { key: "notify_feishu_webhook", value: "  https://open.feishu.cn/open-apis/bot/v2/hook/abc  " },
+      { key: "notify_feishu_secret", value: "  sec  " },
+    ];
+    expect(getNotifyConfig().feishuWebhook).toBe("https://open.feishu.cn/open-apis/bot/v2/hook/abc");
+    expect(getNotifyConfig().feishuSecret).toBe("sec");
   });
 });
 
@@ -373,5 +389,154 @@ describe("buildSuccessMessage", () => {
   it("has the correct format", () => {
     const msg = buildSuccessMessage("Job A", "custom");
     expect(msg).toBe("✅ Bemby job succeeded\n\nJob: Job A\nType: custom");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// maskFeishuWebhook
+// ---------------------------------------------------------------------------
+
+describe("maskFeishuWebhook", () => {
+  it("keeps the host and masks only the hook id", () => {
+    expect(
+      maskFeishuWebhook(
+        "https://open.feishu.cn/open-apis/bot/v2/hook/cb4674f3-200b-4b75-afba-578b031c3f94",
+      ),
+    ).toBe("https://open.feishu.cn/open-apis/bot/v2/hook/****");
+  });
+
+  it("falls back to a generic mask for an unparseable URL", () => {
+    expect(maskFeishuWebhook("not a url")).toBe("https://open.feishu.cn/.../hook/****");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sendFeishuNotify
+// ---------------------------------------------------------------------------
+
+/** A Feishu 200 with code 0. */
+function feishuOk() {
+  return {
+    status: 200,
+    json: async () => ({ code: 0, msg: "success", data: null }),
+  };
+}
+
+describe("sendFeishuNotify", () => {
+  it("posts a text message without a signature when no secret is set", async () => {
+    undiciFetch.mockResolvedValue(feishuOk());
+
+    await sendFeishuNotify("https://open.feishu.cn/open-apis/bot/v2/hook/abc", null, "hello");
+
+    const [url, init] = undiciFetch.mock.calls[0];
+    expect(url).toBe("https://open.feishu.cn/open-apis/bot/v2/hook/abc");
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({ msg_type: "text", content: { text: "hello" } });
+    expect(body.timestamp).toBeUndefined();
+    expect(body.sign).toBeUndefined();
+  });
+
+  it("adds a timestamp and a valid HMAC-SHA256 signature when a secret is set", async () => {
+    undiciFetch.mockResolvedValue(feishuOk());
+
+    await sendFeishuNotify(
+      "https://open.feishu.cn/open-apis/bot/v2/hook/abc",
+      "sec",
+      "hello",
+    );
+
+    const body = JSON.parse(undiciFetch.mock.calls[0][1].body);
+    expect(body.timestamp).toBeDefined();
+    expect(body.sign).toBeDefined();
+    // Recompute the signature the way Feishu does and confirm it matches
+    const expected = createHmac("sha256", `${body.timestamp}\nsec`)
+      .update("")
+      .digest("base64");
+    expect(body.sign).toBe(expected);
+  });
+
+  it("rejects when Feishu returns a non-zero code", async () => {
+    undiciFetch.mockResolvedValue({
+      status: 200,
+      json: async () => ({ code: 19021, msg: "sign match fail" }),
+    });
+    await expect(
+      sendFeishuNotify("https://open.feishu.cn/open-apis/bot/v2/hook/abc", "sec", "hi"),
+    ).rejects.toThrow("sign match fail");
+  });
+
+  it("rejects when the request cannot reach Feishu", async () => {
+    undiciFetch.mockRejectedValue(new Error("getaddrinfo ENOTFOUND"));
+    await expect(
+      sendFeishuNotify("https://open.feishu.cn/open-apis/bot/v2/hook/abc", null, "hi"),
+    ).rejects.toThrow("getaddrinfo ENOTFOUND");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// notifyJobEvent -- Feishu as a second, independent channel
+// ---------------------------------------------------------------------------
+
+describe("notifyJobEvent + Feishu", () => {
+  it("sends to both Telegram and Feishu when both are configured", async () => {
+    settingRows = [
+      { key: "notify_bot_token", value: "123:abc" },
+      { key: "notify_bot_target", value: "42" },
+      { key: "notify_feishu_webhook", value: "https://open.feishu.cn/open-apis/bot/v2/hook/abc" },
+      { key: "notify_feishu_secret", value: "sec" },
+    ];
+    // The bot and Feishu calls hit different hosts; respond to each with its own shape.
+    undiciFetch.mockImplementation((url: string) =>
+      url.includes("telegram.org") ? botOk({ message_id: 1 }) : feishuOk(),
+    );
+
+    await notifyJobEvent("failed", "boom", null);
+
+    expect(undiciFetch).toHaveBeenCalledTimes(2);
+    const feishuCall = undiciFetch.mock.calls[1];
+    expect(feishuCall[0]).toBe("https://open.feishu.cn/open-apis/bot/v2/hook/abc");
+    const feishuBody = JSON.parse(feishuCall[1].body);
+    expect(feishuBody.msg_type).toBe("text");
+    expect(feishuBody.content.text).toBe("boom");
+    expect(feishuBody.sign).toBeDefined();
+  });
+
+  it("sends only to Feishu when Telegram is not configured", async () => {
+    settingRows = [
+      { key: "notify_feishu_webhook", value: "https://open.feishu.cn/open-apis/bot/v2/hook/abc" },
+    ];
+    undiciFetch.mockResolvedValue(feishuOk());
+
+    await notifyJobEvent("failed", "boom", account);
+
+    expect(undiciFetch).toHaveBeenCalledTimes(1);
+    expect(undiciFetch.mock.calls[0][0]).toBe(
+      "https://open.feishu.cn/open-apis/bot/v2/hook/abc",
+    );
+  });
+
+  it("does not send to Feishu when its webhook is unset", async () => {
+    settingRows = [{ key: "notify_bot_token", value: "123:abc" }, { key: "notify_bot_target", value: "42" }];
+    undiciFetch.mockResolvedValue(botOk({ message_id: 1 }));
+
+    await notifyJobEvent("failed", "boom", null);
+
+    expect(undiciFetch).toHaveBeenCalledTimes(1);
+    expect(undiciFetch.mock.calls[0][0]).toBe("https://api.telegram.org/bot123:abc/sendMessage");
+  });
+
+  it("swallows a Feishu failure so the Telegram send and the run are unaffected", async () => {
+    settingRows = [
+      { key: "notify_bot_token", value: "123:abc" },
+      { key: "notify_bot_target", value: "42" },
+      { key: "notify_feishu_webhook", value: "https://open.feishu.cn/open-apis/bot/v2/hook/abc" },
+    ];
+    // Bot call succeeds; Feishu call rejects.
+    undiciFetch
+      .mockResolvedValueOnce(botOk({ message_id: 1 }))
+      .mockRejectedValueOnce(new Error("network down"));
+
+    await expect(notifyJobEvent("failed", "boom", null)).resolves.toBeUndefined();
+    expect(undiciFetch).toHaveBeenCalledTimes(2);
   });
 });

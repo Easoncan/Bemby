@@ -53,10 +53,14 @@ import {
   getBotInfo,
   getNotifyConfig,
   maskBotToken,
+  maskFeishuWebhook,
   NOTIFY_BOT_TARGET_KEY,
   NOTIFY_BOT_TOKEN_KEY,
+  NOTIFY_FEISHU_WEBHOOK_KEY,
+  NOTIFY_FEISHU_SECRET_KEY,
   recentBotChats,
   sendBotNotify,
+  sendFeishuNotify,
 } from "../jobs/notify";
 
 const router = Router();
@@ -78,6 +82,8 @@ export const ALLOWED_KEYS = [
   "notify_tg_events",
   NOTIFY_BOT_TOKEN_KEY,
   NOTIFY_BOT_TARGET_KEY,
+  NOTIFY_FEISHU_WEBHOOK_KEY,
+  NOTIFY_FEISHU_SECRET_KEY,
   "ua_presets",
   "proxies",
   "tg_app_clients",
@@ -108,6 +114,10 @@ export const CLIENT_HIDDEN_KEYS = new Set([
   "proxy_providers",
   // Notification bot token: served masked, under a separate key
   NOTIFY_BOT_TOKEN_KEY,
+  // Feishu webhook + signing secret: never sent back in full (the webhook id is effectively a
+  // password, and the secret is one outright)
+  NOTIFY_FEISHU_WEBHOOK_KEY,
+  NOTIFY_FEISHU_SECRET_KEY,
 ]);
 
 /** True when an AI key exists anywhere the runtime looks: a supplier, the legacy setting or the env. */
@@ -260,9 +270,16 @@ function getClientSettings(): Record<string, string> {
   result.proxy_providers_count = String(providersForClient().length);
   // The notification bot's token, masked. Its presence is what decides whether job
   // notifications go out as the bot or fall back to the job's own account session.
-  const botToken = getNotifyConfig().botToken;
-  result.notify_bot_configured = botToken ? "true" : "false";
-  result.notify_bot_token_masked = botToken ? maskBotToken(botToken) : "";
+  const notifyCfg = getNotifyConfig();
+  result.notify_bot_configured = notifyCfg.botToken ? "true" : "false";
+  result.notify_bot_token_masked = notifyCfg.botToken ? maskBotToken(notifyCfg.botToken) : "";
+  // Feishu custom bot: configured flags only -- the webhook id and secret never leave the
+  // server, and the webhook is shown masked so the operator can confirm it is set.
+  result.notify_feishu_configured = notifyCfg.feishuWebhook ? "true" : "false";
+  result.notify_feishu_webhook_masked = notifyCfg.feishuWebhook
+    ? maskFeishuWebhook(notifyCfg.feishuWebhook)
+    : "";
+  result.notify_feishu_secret_configured = notifyCfg.feishuSecret ? "true" : "false";
   return result;
 }
 
@@ -281,7 +298,10 @@ router.put("/", (req, res) => {
       if (!(key in updates)) continue;
       // Skip if the client sent back the masked hash or bot token unchanged
       if (
-        (key === "default_tg_api_hash" || key === NOTIFY_BOT_TOKEN_KEY) &&
+        (key === "default_tg_api_hash" ||
+          key === NOTIFY_BOT_TOKEN_KEY ||
+          key === NOTIFY_FEISHU_WEBHOOK_KEY ||
+          key === NOTIFY_FEISHU_SECRET_KEY) &&
         String(updates[key]).includes("****")
       )
         continue;
@@ -615,6 +635,28 @@ router.post("/notify/bot/test", async (req, res) => {
   }
   try {
     await sendBotNotify(token, target, "🔔 Bemby test notification");
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(502).json({ ok: false, error: err?.message ?? "Send failed" });
+  }
+});
+
+// ── Feishu custom bot ────────────────────────────────────────────────────────
+// A second notification destination that fires alongside the Telegram bot. A custom bot needs
+// only its webhook URL; a signing secret is required only when signature verification is on.
+
+// POST /notify/feishu/test -- send a real message now, so the webhook + secret (if any) are
+// proven before they are committed. An unsaved webhook or secret can be passed to try it first.
+router.post("/notify/feishu/test", async (req, res) => {
+  const cfg = getNotifyConfig();
+  const webhook = (req.body?.webhook as string | undefined)?.trim() || cfg.feishuWebhook;
+  const secret = (req.body?.secret as string | undefined)?.trim() || cfg.feishuSecret;
+  if (!webhook) {
+    res.status(400).json({ ok: false, error: "No Feishu webhook configured" });
+    return;
+  }
+  try {
+    await sendFeishuNotify(webhook, secret, "🔔 Bemby 测试通知 / test notification");
     res.json({ ok: true });
   } catch (err: any) {
     res.status(502).json({ ok: false, error: err?.message ?? "Send failed" });

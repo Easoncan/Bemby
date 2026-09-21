@@ -321,17 +321,19 @@ export function formatNotifyTime(now: Date = new Date()): string {
   }
 }
 
-function feishuField(label: string, value: string) {
+/** One card row: the label and its value share a line, separated by a full-width colon. */
+function feishuRow(label: string, value: string) {
   return {
-    is_short: true,
-    text: { tag: "lark_md", content: `**${label}**\n${value}` },
+    tag: "div",
+    text: { tag: "lark_md", content: `**${label}**：${value}` },
   };
 }
 
 /**
  * Builds the interactive-card payload a finished job renders as on Feishu: a coloured
- * header (green success / red failure) with a Chinese title, then the fields every
- * run shares -- job, type, time, result -- plus the error detail on failures.
+ * header (green success / red failure) with a Chinese title, then one full-width row per
+ * field -- job, type, time, result -- plus, on failures, a divider and the error detail
+ * (its label on one line, the text on the next).
  */
 export function buildFeishuJobCard(
   event: NotifyEvent,
@@ -339,15 +341,10 @@ export function buildFeishuJobCard(
 ): Record<string, unknown> {
   const ok = event === "success";
   const elements: Record<string, unknown>[] = [
-    {
-      tag: "div",
-      fields: [
-        feishuField("任务", meta.jobName),
-        feishuField("类型", FEISHU_JOB_TYPE_LABELS[meta.jobType] ?? meta.jobType),
-        feishuField("时间", formatNotifyTime()),
-        feishuField("结果", ok ? "✅ 成功" : "❌ 失败"),
-      ],
-    },
+    feishuRow("任务", meta.jobName),
+    feishuRow("类型", FEISHU_JOB_TYPE_LABELS[meta.jobType] ?? meta.jobType),
+    feishuRow("时间", formatNotifyTime()),
+    feishuRow("结果", ok ? "✅ 成功" : "❌ 失败"),
   ];
   if (meta.detail) {
     elements.push({ tag: "hr" });

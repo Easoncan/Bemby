@@ -4,6 +4,14 @@ All notable changes to Bemby are documented here.
 
 ---
 
+## v1.0.4
+
+飞书卡片排版调整：任务名称、类型、时间、结果由两列改为每项独占一行，标签与取值同行并用全角冒号连接（如 `任务：Daily Checkin`），信息更清晰不再拥挤。详情段落保持原有排版（标题一行、内容一行）。
+
+Feishu card layout tweak: job name, type, time and result now each occupy their own row instead of two columns, with the label and value on the same line joined by a full-width colon (e.g. `任务：Daily Checkin`). The detail block keeps its original layout (label on one line, text on the next).
+
+---
+
 ## v1.0.3
 
 飞书通知升级为卡片消息：任务结束推送不再是纯文本，而是一张带彩色标题栏的交互卡片 —— 成功为绿色「🤖 Bemby 自动任务 · 执行成功」，失败为红色「🤖 Bemby 自动任务 · 执行失败」，正文以字段形式展示任务名称、任务类型（中文）、触发时间（按实例时区，带 UTC 偏移）与结果，失败时额外附分隔线与错误详情。设置页的「发送测试」同步改为发送同款卡片，便于预览真实样式。Telegram 通知格式保持不变。

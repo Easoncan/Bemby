@@ -4,6 +4,14 @@ All notable changes to Bemby are documented here.
 
 ---
 
+## v1.0.3
+
+飞书通知升级为卡片消息：任务结束推送不再是纯文本，而是一张带彩色标题栏的交互卡片 —— 成功为绿色「🤖 Bemby 自动任务 · 执行成功」，失败为红色「🤖 Bemby 自动任务 · 执行失败」，正文以字段形式展示任务名称、任务类型（中文）、触发时间（按实例时区，带 UTC 偏移）与结果，失败时额外附分隔线与错误详情。设置页的「发送测试」同步改为发送同款卡片，便于预览真实样式。Telegram 通知格式保持不变。
+
+Feishu notifications are now interactive cards instead of plain text: success renders a green "🤖 Bemby 自动任务 · 执行成功" header and failure a red "🤖 Bemby 自动任务 · 执行失败", with the job name, job type (in Chinese), trigger time (instance timezone with the UTC offset) and result as fields, plus a divider and the error detail on failures. The test button in Settings sends the same card so the format can be previewed. Telegram notifications are unchanged.
+
+---
+
 ## v1.0.2
 
 新增飞书（Feishu）自定义机器人作为第二个通知通道：在设置中填入机器人的 Webhook 地址与可选的签名校验密钥后，任务结束通知会同时推送到 Telegram 与飞书。两个通道相互独立，任一通道发送失败只作记录，不影响另一个通道，也不会影响任务本身。Webhook 地址仅以掩码回显（隐藏 hook id），签名密钥保存后永不下发，可随时发送测试消息验证配置是否可用。

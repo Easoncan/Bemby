@@ -9,6 +9,7 @@ vi.mock("../db/database", () => ({
       run: vi.fn(),
     }),
   },
+  getDefaultTimezone: vi.fn(() => "Asia/Shanghai"),
 }));
 
 const undiciFetch = vi.fn();
@@ -39,9 +40,12 @@ import {
   recentBotChats,
   sendBotNotify,
   sendFeishuNotify,
+  buildFeishuJobCard,
+  formatNotifyTime,
   buildFailureMessage,
   buildSuccessMessage,
 } from "../jobs/notify";
+import { getDefaultTimezone } from "../db/database";
 import type { TgAccount } from "../types";
 
 const account = {
@@ -474,6 +478,66 @@ describe("sendFeishuNotify", () => {
 });
 
 // ---------------------------------------------------------------------------
+// buildFeishuJobCard / formatNotifyTime
+// ---------------------------------------------------------------------------
+
+describe("formatNotifyTime", () => {
+  it("formats the instance timezone with a UTC offset suffix", () => {
+    // 2026-09-20T16:05:07Z is 2026-09-21 00:05:07 in Asia/Shanghai (UTC+8)
+    const out = formatNotifyTime(new Date("2026-09-20T16:05:07Z"));
+    expect(out).toBe("2026-09-21 00:05:07 (UTC+8)");
+  });
+
+  it("falls back to the ISO string for an unknown zone", () => {
+    vi.mocked(getDefaultTimezone).mockReturnValueOnce("Not/AZone");
+    const date = new Date("2026-09-20T16:05:07Z");
+    expect(formatNotifyTime(date)).toBe(date.toISOString());
+  });
+});
+
+describe("buildFeishuJobCard", () => {
+  it("renders a green success card with the Chinese title and the shared fields", () => {
+    const body = buildFeishuJobCard("success", { jobName: "Daily", jobType: "checkin" });
+    expect(body.msg_type).toBe("interactive");
+    const card = body.card as any;
+    expect(card.header).toEqual({
+      title: { tag: "plain_text", content: "🤖 Bemby 自动任务 · 执行成功" },
+      template: "green",
+    });
+    const fields = card.elements[0].fields.map((f: any) => f.text.content);
+    expect(fields[0]).toContain("Daily");
+    expect(fields[1]).toContain("签到任务");
+    expect(fields[2]).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+    expect(fields[3]).toContain("✅ 成功");
+    // No failure detail on a success card
+    expect(card.elements).toHaveLength(1);
+  });
+
+  it("renders a red failure card with the error detail after a divider", () => {
+    const body = buildFeishuJobCard("failed", {
+      jobName: "Daily",
+      jobType: "custom",
+      detail: "connect timed out",
+    });
+    const card = body.card as any;
+    expect(card.header).toEqual({
+      title: { tag: "plain_text", content: "🤖 Bemby 自动任务 · 执行失败" },
+      template: "red",
+    });
+    expect(card.elements[0].fields[3].text.content).toContain("❌ 失败");
+    expect(card.elements[1]).toEqual({ tag: "hr" });
+    expect(card.elements[2].text.content).toContain("**详情**");
+    expect(card.elements[2].text.content).toContain("connect timed out");
+  });
+
+  it("passes an unknown job type through as-is", () => {
+    const body = buildFeishuJobCard("success", { jobName: "X", jobType: "mystery" });
+    const fields = (body.card as any).elements[0].fields;
+    expect(fields[1].text.content).toContain("mystery");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // notifyJobEvent -- Feishu as a second, independent channel
 // ---------------------------------------------------------------------------
 
@@ -499,6 +563,31 @@ describe("notifyJobEvent + Feishu", () => {
     expect(feishuBody.msg_type).toBe("text");
     expect(feishuBody.content.text).toBe("boom");
     expect(feishuBody.sign).toBeDefined();
+  });
+
+  it("posts an interactive card to Feishu when structured meta is given", async () => {
+    settingRows = [
+      { key: "notify_feishu_webhook", value: "https://open.feishu.cn/open-apis/bot/v2/hook/abc" },
+    ];
+    undiciFetch.mockResolvedValue(feishuOk());
+
+    await notifyJobEvent("failed", "boom", null, null, {
+      jobName: "Daily Checkin",
+      jobType: "checkin",
+      detail: "connect timed out",
+    });
+
+    expect(undiciFetch).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(undiciFetch.mock.calls[0][1].body);
+    expect(body.msg_type).toBe("interactive");
+    const card = body.card as any;
+    expect(card.header.title.content).toBe("🤖 Bemby 自动任务 · 执行失败");
+    expect(card.header.template).toBe("red");
+    const fields = card.elements[0].fields.map((f: any) => f.text.content);
+    expect(fields[0]).toContain("Daily Checkin");
+    expect(fields[1]).toContain("签到任务");
+    expect(fields[3]).toContain("❌ 失败");
+    expect(card.elements[2].text.content).toContain("connect timed out");
   });
 
   it("sends only to Feishu when Telegram is not configured", async () => {

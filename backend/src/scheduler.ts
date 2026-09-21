@@ -341,6 +341,8 @@ export async function executeJob(
       "success",
       buildSuccessMessage(job.name, job.jobType),
       account,
+      undefined,
+      { jobName: job.name, jobType: job.jobType },
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -357,6 +359,8 @@ export async function executeJob(
         "failed",
         buildFailureMessage(job.name, job.jobType, message),
         account,
+        undefined,
+        { jobName: job.name, jobType: job.jobType, detail: message },
       );
     }
   } finally {

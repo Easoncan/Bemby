@@ -2,7 +2,7 @@
   <img src="docs/logo.png" width="200" alt="Bemby" />
 </p>
 
-# Bemby v1.0.2
+# Bemby v1.0.3
 
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Feasoncan%2Fbemby-2496ED?logo=github)](https://github.com/Easoncan/Bemby/pkgs/container/bemby)
 [![更新日志](https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E5%BF%97-%E6%9F%A5%E7%9C%8B-blue)](https://github.com/Easoncan/Bemby/blob/main/CHANGELOG.md)
@@ -112,7 +112,7 @@ docker run -d \
   ghcr.io/easoncan/bemby:latest
 ```
 
-镜像发布到 GitHub 容器仓库（GHCR）：`ghcr.io/easoncan/bemby:latest`。生产环境建议使用明确版本标签，例如 `ghcr.io/easoncan/bemby:1.0.2`。
+镜像发布到 GitHub 容器仓库（GHCR）：`ghcr.io/easoncan/bemby:latest`。生产环境建议使用明确版本标签，例如 `ghcr.io/easoncan/bemby:1.0.3`。
 
 > `JWT_SECRET` 为必填项，且不能使用公开的占位值（如 `change-me-in-production`），否则应用将拒绝启动。请用 `openssl rand -hex 32` 生成。
 
@@ -459,7 +459,7 @@ docker run -d \
   ghcr.io/easoncan/bemby:latest
 ```
 
-Images are published to the GitHub Container Registry (GHCR): `ghcr.io/easoncan/bemby:latest`. For production, use a fixed version tag such as `ghcr.io/easoncan/bemby:1.0.2`.
+Images are published to the GitHub Container Registry (GHCR): `ghcr.io/easoncan/bemby:latest`. For production, use a fixed version tag such as `ghcr.io/easoncan/bemby:1.0.3`.
 
 > `JWT_SECRET` is required and must not be a publicly known placeholder (e.g. `change-me-in-production`), or the app refuses to start. Generate one with `openssl rand -hex 32`.
 

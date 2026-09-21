@@ -60,7 +60,8 @@ import {
   NOTIFY_FEISHU_SECRET_KEY,
   recentBotChats,
   sendBotNotify,
-  sendFeishuNotify,
+  sendFeishuCard,
+  buildFeishuJobCard,
 } from "../jobs/notify";
 
 const router = Router();
@@ -656,7 +657,16 @@ router.post("/notify/feishu/test", async (req, res) => {
     return;
   }
   try {
-    await sendFeishuNotify(webhook, secret, "🔔 Bemby 测试通知 / test notification");
+    // Send the same card shape a real job produces, so the test previews the format.
+    await sendFeishuCard(
+      webhook,
+      secret,
+      buildFeishuJobCard("success", {
+        jobName: "测试通知 / test",
+        jobType: "checkin",
+        detail: "收到这条卡片即表示飞书 Webhook 与签名配置正常 🎉",
+      }),
+    );
     res.json({ ok: true });
   } catch (err: any) {
     res.status(502).json({ ok: false, error: err?.message ?? "Send failed" });

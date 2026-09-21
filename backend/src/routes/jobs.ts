@@ -494,6 +494,8 @@ router.post("/:id/run", async (req, res) => {
         "success",
         buildSuccessMessage(job.name, job.jobType),
         account,
+        undefined,
+        { jobName: job.name, jobType: job.jobType },
       );
     })
     .catch((err: unknown) => {
@@ -508,6 +510,8 @@ router.post("/:id/run", async (req, res) => {
           "failed",
           buildFailureMessage(job.name, job.jobType, message),
           account,
+          undefined,
+          { jobName: job.name, jobType: job.jobType, detail: message },
         );
       }
     })

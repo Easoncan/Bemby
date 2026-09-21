@@ -4,7 +4,7 @@ import { StringSession } from "telegram/sessions";
 import { fetch as undiciFetch } from "undici";
 import { createHmac } from "node:crypto";
 import type { TgAccount } from "../types";
-import { db } from "../db/database";
+import { db, getDefaultTimezone } from "../db/database";
 
 export type NotifyEvent = "success" | "failed";
 
@@ -219,33 +219,30 @@ function feishuSignature(secret: string): { timestamp: string; sign: string } {
 }
 
 /**
- * Posts a text message to a Feishu custom bot webhook. Throws with Feishu's own error text
+ * Posts a payload to a Feishu custom bot webhook. Throws with Feishu's own error text
  * on a non-zero `code` or a transport failure, so callers can catch and report it.
+ * Feishu always answers with HTTP 200 and signals outcome via `code` in the body: 0
+ * means success, anything else is an error. A body that is not JSON (proxy error
+ * page, etc.) is treated as failure rather than a silent success.
  */
-export async function sendFeishuNotify(
+async function postFeishu(
   webhook: string,
   secret: string | null,
-  message: string,
+  body: Record<string, unknown>,
 ): Promise<void> {
-  const body: Record<string, unknown> = {
-    msg_type: "text",
-    content: { text: message },
-  };
+  const payload: Record<string, unknown> = { ...body };
   if (secret) {
     const { timestamp, sign } = feishuSignature(secret);
-    body.timestamp = timestamp;
-    body.sign = sign;
+    payload.timestamp = timestamp;
+    payload.sign = sign;
   }
   try {
     const res = await undiciFetch(webhook, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(15000),
     });
-    // Feishu always answers with HTTP 200 and signals outcome via `code` in the body: 0 means
-    // success, anything else is an error. A body that is not JSON (proxy error page, etc.) is
-    // treated as failure rather than a silent success.
     let json: { code?: number; msg?: string; StatusMessage?: string };
     try {
       json = (await res.json()) as typeof json;
@@ -261,6 +258,123 @@ export async function sendFeishuNotify(
   } catch (err: unknown) {
     throw new Error(err instanceof Error ? err.message : String(err));
   }
+}
+
+/**
+ * Posts a text message to a Feishu custom bot webhook.
+ */
+export async function sendFeishuNotify(
+  webhook: string,
+  secret: string | null,
+  message: string,
+): Promise<void> {
+  await postFeishu(webhook, secret, {
+    msg_type: "text",
+    content: { text: message },
+  });
+}
+
+/** Structured info the Feishu card renders from. The Telegram text keeps its own
+ *  plain format; only the Feishu channel upgrades to an interactive card. */
+export type FeishuJobMeta = {
+  jobName: string;
+  jobType: string;
+  /** Failure detail (the error text) shown in the card body; omitted when absent. */
+  detail?: string | null;
+};
+
+const FEISHU_JOB_TYPE_LABELS: Record<string, string> = {
+  checkin: "签到任务",
+  embywatch: "Emby 观看",
+  custom: "自定义任务",
+  autoreg: "自动注册",
+};
+
+/** Feishu icon + title prefix shared by every card, success or failure alike. */
+const FEISHU_CARD_TITLE_OK = "🤖 Bemby 自动任务 · 执行成功";
+const FEISHU_CARD_TITLE_FAILED = "🤖 Bemby 自动任务 · 执行失败";
+
+/**
+ * Formats the current time in the instance's default_timezone, e.g.
+ * `2026-09-21 00:05:07 (UTC+8)`. Falls back to the ISO string if the zone is unknown.
+ */
+export function formatNotifyTime(now: Date = new Date()): string {
+  const tz = getDefaultTimezone();
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+      timeZoneName: "shortOffset",
+    }).formatToParts(now);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+    const offset = get("timeZoneName").replace(/^GMT/, "UTC");
+    const base = `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+    return offset && offset !== "UTC" ? `${base} (${offset})` : base;
+  } catch {
+    return now.toISOString();
+  }
+}
+
+function feishuField(label: string, value: string) {
+  return {
+    is_short: true,
+    text: { tag: "lark_md", content: `**${label}**\n${value}` },
+  };
+}
+
+/**
+ * Builds the interactive-card payload a finished job renders as on Feishu: a coloured
+ * header (green success / red failure) with a Chinese title, then the fields every
+ * run shares -- job, type, time, result -- plus the error detail on failures.
+ */
+export function buildFeishuJobCard(
+  event: NotifyEvent,
+  meta: FeishuJobMeta,
+): Record<string, unknown> {
+  const ok = event === "success";
+  const elements: Record<string, unknown>[] = [
+    {
+      tag: "div",
+      fields: [
+        feishuField("任务", meta.jobName),
+        feishuField("类型", FEISHU_JOB_TYPE_LABELS[meta.jobType] ?? meta.jobType),
+        feishuField("时间", formatNotifyTime()),
+        feishuField("结果", ok ? "✅ 成功" : "❌ 失败"),
+      ],
+    },
+  ];
+  if (meta.detail) {
+    elements.push({ tag: "hr" });
+    elements.push({
+      tag: "div",
+      text: { tag: "lark_md", content: `**详情**\n${meta.detail}` },
+    });
+  }
+  return {
+    msg_type: "interactive",
+    card: {
+      header: {
+        title: { tag: "plain_text", content: ok ? FEISHU_CARD_TITLE_OK : FEISHU_CARD_TITLE_FAILED },
+        template: ok ? "green" : "red",
+      },
+      elements,
+    },
+  };
+}
+
+/** Posts a pre-built payload -- e.g. the card from {@link buildFeishuJobCard}. */
+export async function sendFeishuCard(
+  webhook: string,
+  secret: string | null,
+  body: Record<string, unknown>,
+): Promise<void> {
+  await postFeishu(webhook, secret, body);
 }
 
 /**
@@ -318,6 +432,7 @@ export async function notifyJobEvent(
   message: string,
   account?: TgAccount | null,
   target?: string | null,
+  feishuMeta?: FeishuJobMeta | null,
 ): Promise<void> {
   const cfg = getNotifyConfig();
   if (!cfg.events.includes(event)) return;
@@ -344,8 +459,13 @@ export async function notifyJobEvent(
 
   // Feishu channel: an independent second destination. Both platforms get the same push when
   // each is configured; a Feishu failure must not affect the run or the Telegram send.
+  // With structured meta the channel renders an interactive card; without it the
+  // plain text message is posted as-is.
   if (cfg.feishuWebhook) {
-    await sendFeishuNotify(cfg.feishuWebhook, cfg.feishuSecret, message).catch((e) =>
+    const send = feishuMeta
+      ? sendFeishuCard(cfg.feishuWebhook, cfg.feishuSecret, buildFeishuJobCard(event, feishuMeta))
+      : sendFeishuNotify(cfg.feishuWebhook, cfg.feishuSecret, message);
+    await send.catch((e) =>
       console.warn("[notify] feishu notification failed:", e),
     );
   }

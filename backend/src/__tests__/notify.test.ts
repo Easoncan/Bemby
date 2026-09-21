@@ -496,7 +496,7 @@ describe("formatNotifyTime", () => {
 });
 
 describe("buildFeishuJobCard", () => {
-  it("renders a green success card with the Chinese title and one row per field", () => {
+  it("renders a green success card with the Chinese title and compact one-per-line rows", () => {
     const body = buildFeishuJobCard("success", { jobName: "Daily", jobType: "checkin" });
     expect(body.msg_type).toBe("interactive");
     const card = body.card as any;
@@ -504,15 +504,14 @@ describe("buildFeishuJobCard", () => {
       title: { tag: "plain_text", content: "🤖 Bemby 自动任务 · 执行成功" },
       template: "green",
     });
-    // One full-width row per field, label and value on the same line with a colon.
-    const rows = card.elements.map((e: any) => e.text.content);
-    expect(rows).toHaveLength(4);
-    expect(rows[0]).toBe("**任务**：Daily");
-    expect(rows[1]).toBe("**类型**：签到任务");
-    expect(rows[2]).toMatch(/^\*\*时间\*\*：\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
-    expect(rows[3]).toBe("**结果**：✅ 成功");
-    // No failure detail on a success card
-    expect(card.elements.some((e: any) => e.tag === "hr")).toBe(false);
+    // All four rows live in a single text element, separated only by newlines (no element gap).
+    expect(card.elements).toHaveLength(1);
+    const lines = card.elements[0].text.content.split("\n");
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toBe("**任务**：Daily");
+    expect(lines[1]).toBe("**类型**：签到任务");
+    expect(lines[2]).toMatch(/^\*\*时间\*\*：\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+    expect(lines[3]).toBe("**结果**：✅ 成功");
   });
 
   it("renders a red failure card with the error detail after a divider", () => {
@@ -526,15 +525,15 @@ describe("buildFeishuJobCard", () => {
       title: { tag: "plain_text", content: "🤖 Bemby 自动任务 · 执行失败" },
       template: "red",
     });
-    expect(card.elements[3].text.content).toBe("**结果**：❌ 失败");
-    expect(card.elements[4]).toEqual({ tag: "hr" });
-    expect(card.elements[5].text.content).toContain("**详情**");
-    expect(card.elements[5].text.content).toContain("connect timed out");
+    expect(card.elements[0].text.content.split("\n")[3]).toBe("**结果**：❌ 失败");
+    expect(card.elements[1]).toEqual({ tag: "hr" });
+    expect(card.elements[2].text.content).toContain("**详情**");
+    expect(card.elements[2].text.content).toContain("connect timed out");
   });
 
   it("passes an unknown job type through as-is", () => {
     const body = buildFeishuJobCard("success", { jobName: "X", jobType: "mystery" });
-    expect((body.card as any).elements[1].text.content).toBe("**类型**：mystery");
+    expect((body.card as any).elements[0].text.content).toContain("**类型**：mystery");
   });
 });
 
@@ -584,14 +583,11 @@ describe("notifyJobEvent + Feishu", () => {
     const card = body.card as any;
     expect(card.header.title.content).toBe("🤖 Bemby 自动任务 · 执行失败");
     expect(card.header.template).toBe("red");
-    const rows = card.elements
-      .filter((e: any) => e.tag === "div")
-      .map((e: any) => e.text.content);
-    expect(rows[0]).toBe("**任务**：Daily Checkin");
-    expect(rows[1]).toBe("**类型**：签到任务");
-    expect(rows[3]).toBe("**结果**：❌ 失败");
-    expect(rows[4]).toContain("connect timed out");
-    expect(card.elements[4]).toEqual({ tag: "hr" });
+    const lines = card.elements[0].text.content.split("\n");
+    expect(lines[0]).toBe("**任务**：Daily Checkin");
+    expect(lines[1]).toBe("**类型**：签到任务");
+    expect(lines[3]).toBe("**结果**：❌ 失败");
+    expect(card.elements[2].text.content).toContain("connect timed out");
   });
 
   it("sends only to Feishu when Telegram is not configured", async () => {

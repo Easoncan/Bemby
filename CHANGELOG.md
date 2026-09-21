@@ -4,6 +4,14 @@ All notable changes to Bemby are documented here.
 
 ---
 
+## v1.0.5
+
+飞书卡片正文收紧行距：任务名称、类型、时间、结果四行改为同一文本块内的连续换行，去掉元素之间被飞书自动插入的空隙，四行紧贴显示、更像一段信息。详情段落不变。
+
+Feishu card body tightened: the four rows (job name, type, time, result) now live in a single text block separated only by newlines, removing the gaps Feishu inserts between separate elements so the rows sit flush together. The detail block is unchanged.
+
+---
+
 ## v1.0.4
 
 飞书卡片排版调整：任务名称、类型、时间、结果由两列改为每项独占一行，标签与取值同行并用全角冒号连接（如 `任务：Daily Checkin`），信息更清晰不再拥挤。详情段落保持原有排版（标题一行、内容一行）。

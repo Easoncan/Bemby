@@ -348,16 +348,31 @@ export type Proxy = {
   url: string;
 };
 
-export type CustomAction =
+export type ActionCondition = {
+  variable: string;
+  operator: "equals" | "not_equals" | "contains" | "exists" | "not_exists";
+  value?: string;
+};
+
+export type CustomAction = (
   | { type: "send_command"; content: string; maxRetries?: number }
   | {
+      // Send a message/command to a specific contact (bot/group/user), rather than the
+      // job's configured bot. Supports the same {aiInput} and command expansion as send_command.
       type: "send_contact_message";
       contact: string;
       content: string;
       maxRetries?: number;
     }
+  // `scope` limits which messages an action considers, relative to the last
+  // message we sent (the anchor). 0 (default) = only replies newer than the
+  // anchor; -N = also the N most recent incoming messages before the anchor.
   | {
       type: "wait_reply";
+      contact?: string;
+      afterStep?: string;
+      saveAs?: string;
+      sensitive?: boolean;
       maxWaitMs: number;
       successContains?: string;
       failContains?: string;
@@ -373,10 +388,16 @@ export type CustomAction =
       successContains?: string;
       failContains?: string;
       scope?: number;
+      /** Open a Cloudflare-gated URL button/answer (e.g. "我不是机器人") in a headless browser to pass the "I am not a bot" check. */
       cfChallenge?: boolean;
     }
   | {
+      // Click a button on the latest message from a specific contact (bot/group/user),
+      // rather than from the job's configured bot. Seeds from the contact's last received
+      // message and otherwise waits up to maxWaitMs for an incoming one with buttons.
       type: "click_message_button";
+      afterStep?: string;
+      match?: "exact" | "contains";
       contact: string;
       button: string;
       maxRetries: number;
@@ -384,9 +405,13 @@ export type CustomAction =
       successContains?: string;
       failContains?: string;
       scope?: number;
+      /** Open a Cloudflare-gated URL button/answer (e.g. "我不是机器人") in a headless browser to pass the "I am not a bot" check. */
       cfChallenge?: boolean;
     }
   | {
+      // AI selects and clicks multiple buttons in order. The AI returns a JSON array of
+      // exact button texts; each is clicked in sequence with `gapMs` between clicks.
+      // `contact` empty/undefined targets the job's bot chat; otherwise that peer.
       type: "ai_multiple_btn";
       contact?: string;
       hint?: string;
@@ -407,94 +432,252 @@ export type CustomAction =
       type: "join_group";
       groupId: string;
       checkMembership?: boolean;
+      // When set, after joining, wait for an in-group verification message and click the
+      // button whose text contains this string (bot-gated groups). verifyWaitMs bounds the wait.
       verifyButton?: string;
       verifyWaitMs?: number;
     }
   | {
-      /** Mini App opened at a given address rather than one found on a button. */
+      // Open a Mini App button's page in the installed browser (passing Cloudflare on
+      // the way) and press a control inside the app, which is where such bots put the
+      // actual checkin. `contact` empty/undefined targets the job's bot chat.
+      type: "open_mini_app";
+      contact?: string;
+      /** Inline button that opens the Mini App; blank takes the most recent one. */
+      button?: string;
+      /**
+       * Steps to run inside the app, in order: a control's visible text, `css:<selector>`,
+       * `delay(2500)`, `scroll(x, y)` to reach something below the fold, or an `{aiBtn}` /
+       * `{input}` / `{aiInput}` placeholder. Blank auto-detects a checkin-worded control.
+       */
+      appButtons?: string[];
+      successContains?: string;
+      failContains?: string;
+      maxRetries?: number;
+      /**
+       * Budget for the browser part of this action, across every proxy tried.
+       * Blank/0 uses the built-in default (5 minutes).
+       */
+      maxWaitMs?: number;
+      /** Proxy the browser exits through: a proxy list id, or "direct" for none. Blank uses the job's proxy. */
+      proxyId?: string;
+      /** Work through the rest of the proxy list when an exit is refused. Defaults to true. */
+      tryAllProxies?: boolean;
+    }
+  | {
+      // Same as `open_mini_app`, but the address is given rather than hunted from a button
+      // in the chat. Telegram still signs it for the job's own account, so the app sees
+      // that user -- which is what makes one template usable across many accounts.
       type: "open_mini_app_url";
+      /** Mini App address, or a t.me/<bot>/<app> link, which names its own bot. */
       url: string;
       /** Bot that owns the app, used to sign the URL. Blank uses the job's bot. */
       contact?: string;
+      /**
+       * Steps to run inside the app, in order, same vocabulary as `open_mini_app`
+       * (control text, `css:`, `delay()`, `scroll()`, `{aiBtn}`, `{input}`, `{aiInput}`).
+       * Blank auto-detects a checkin control.
+       */
       appButtons?: string[];
       successContains?: string;
       failContains?: string;
       maxRetries?: number;
+      /** Budget for the browser part of this action. Blank/0 uses the default. */
       maxWaitMs?: number;
+      /** Proxy the browser exits through: a proxy list id, or "direct". Blank uses the job's. */
       proxyId?: string;
+      /** Work through the rest of the proxy list when an exit is refused. Defaults to true. */
       tryAllProxies?: boolean;
     }
   | {
-      /** The Mini App a bot pins beside the composer, opened without naming an address. */
+      // Open the Mini App a bot pins beside the composer -- the button at the bottom left
+      // of its chat, next to the attachment clip. It belongs to the bot rather than to any
+      // message, so nothing in the chat history points at it and no address needs typing:
+      // the bot is asked what its button is, and Telegram signs it for this account.
       type: "open_bot_menu_app";
       /** Bot whose menu button to open. Blank uses the job's bot. */
       contact?: string;
+      /**
+       * Steps to run inside the app, in order, same vocabulary as `open_mini_app`
+       * (control text, `css:`, `delay()`, `scroll()`, `{aiBtn}`, `{input}`, `{aiInput}`).
+       * Blank auto-detects a checkin control.
+       */
       appButtons?: string[];
       successContains?: string;
       failContains?: string;
       maxRetries?: number;
+      /** Budget for the browser part of this action. Blank/0 uses the default. */
       maxWaitMs?: number;
+      /** Proxy the browser exits through: a proxy list id, or "direct". Blank uses the job's. */
       proxyId?: string;
+      /** Work through the rest of the proxy list when an exit is refused. Defaults to true. */
       tryAllProxies?: boolean;
     }
   | {
-      type: "open_mini_app";
-      contact?: string;
-      button?: string;
-      appButtons?: string[];
-      successContains?: string;
-      failContains?: string;
-      maxRetries?: number;
-      /** Budget for the browser part, across every proxy tried. 0/blank uses the default. */
-      maxWaitMs?: number;
-      /** Proxy the browser exits through: a proxy id, or "direct". Blank uses the job proxy. */
-      proxyId?: string;
-      /** Work through the rest of the proxy list when an exit is refused. */
-      tryAllProxies?: boolean;
-    }
-  | {
+      // Open a plain web page in the installed browser, passing any Cloudflare challenge,
+      // and drive it with the sub-steps below. Nothing about this action goes through
+      // Telegram unless a web_telegram_login sub-step explicitly requests it.
       type: "open_url";
       url: string;
+      /** Sub-steps run on the page once it is up, in order. */
       steps?: WebStep[];
       successContains?: string;
       failContains?: string;
       maxRetries?: number;
-      /** Budget for the browser part, across every proxy tried. 0/blank uses the default. */
+      /**
+       * Budget for the browser part of this action, across every proxy tried.
+       * Blank/0 uses the built-in default (5 minutes).
+       */
       maxWaitMs?: number;
-      /** Proxy the browser exits through: a proxy id, or "direct". Blank uses the job proxy. */
+      /** Proxy the browser exits through: a proxy list id, or "direct" for none. Blank uses the job's proxy. */
       proxyId?: string;
-      /** Work through the rest of the proxy list when an exit is refused. */
+      /** Work through the rest of the proxy list when an exit is refused. Defaults to true. */
       tryAllProxies?: boolean;
     }
   | { type: "subscribe_channel"; channelId: string; checkMembership?: boolean }
   | {
-      /** Set the account's own Telegram bio. Blank clears it. */
+      // Set the account's own Telegram bio from the job. Always applied -- a blank one clears
+      // the bio, which is what a checkin that demanded a keyword in the bio needs put back
+      // afterwards. The name is deliberately not touched: changing who the account appears to
+      // be is not something a checkin step should do as a side effect.
       type: "update_profile";
+      /** New bio; blank clears it. Supports {word:N} {num:N} {alpha:N} {uuid}. */
       about?: string;
       maxRetries?: number;
-    };
+    }
+  | {
+      type: "web_open";
+      session: string;
+      url: string;
+      maxWaitMs?: number;
+      maxRetries?: number;
+      proxyId?: string;
+      tryAllProxies?: boolean;
+    }
+  | {
+      type: "web_steps";
+      session: string;
+      steps: WebStep[];
+      successContains?: string;
+      failContains?: string;
+      maxWaitMs?: number;
+      maxRetries?: number;
+    }
+  | {
+      type: "set_variable";
+      name: string;
+      value: string;
+      pattern?: string;
+      group?: number;
+      sensitive?: boolean;
+    }
+) & { id?: string; when?: ActionCondition };
 
 /** One sub-step of `open_url`, run against the loaded page. */
 export type WebStep =
   | {
-      type: "web_telegram_login";
-      selector: string;
-      loginSelector?: string;
-      successSelector: string;
-      contact?: string;
-      commandPrefix?: string;
-      confirmButton?: string;
+      type: "web_extract";
+      selector?: string;
+      matchText?: string;
+      source: "text" | "value" | "attribute" | "url" | "exists";
+      attribute?: string;
+      pattern?: string;
+      group?: number;
+      saveAs: string;
+      sensitive?: boolean;
       waitMs?: number;
     }
-  | { type: "web_input"; selector: string; text: string }
-  | { type: "web_button"; selector: string }
-  | { type: "web_delay"; waitMs: number }
-  | { type: "web_scroll"; x?: number; y?: number }
-  | { type: "web_wait_element"; selector: string; waitMs?: number }
-  | { type: "web_turnstile" }
-  | { type: "ai_web_button"; hint?: string }
-  | { type: "ai_web_click_xy"; hint?: string }
-  | { type: "ai_web_input"; hint?: string; text?: string };
+  | {
+      /** Read a login command, confirm it through this account's bot, and await the page. */
+      type: "web_telegram_login";
+      /** Element containing the command, e.g. code. Supports Playwright CSS selectors. */
+      selector: string;
+      /** Control to start login if the command is not visible yet. */
+      loginSelector?: string;
+      /** Visible element proving that the page is authenticated. Also skips repeat login. */
+      successSelector: string;
+      /** Bot to receive the command. Blank uses the job's target bot. */
+      contact?: string;
+      /** Only this command is extracted from the page. Defaults to /login. */
+      commandPrefix?: string;
+      /** Exact callback button on a new bot reply; blank skips bot-side confirmation. */
+      confirmButton?: string;
+      /** Total time for this login, including Telegram confirmation. Defaults to 60s. */
+      waitMs?: number;
+    }
+  | {
+      /** Type text into a field named by a CSS selector. */
+      type: "web_input";
+      selector: string;
+      text: string;
+    }
+  | {
+      /** Press a control named by a CSS selector. */
+      type: "web_button";
+      selector: string;
+      matchText?: string;
+    }
+  | {
+      /** Sit still for a while, for a page that needs a moment between steps. */
+      type: "web_delay";
+      waitMs: number;
+    }
+  | {
+      /**
+       * Scroll the page by pixels, to bring something below the fold within reach of the
+       * steps after it. Either figure may be negative to scroll back, and one past the end
+       * of the page simply lands at the end.
+       */
+      type: "web_scroll";
+      /** Horizontal move in pixels. Blank/0 leaves the column alone. */
+      x?: number;
+      /** Vertical move in pixels. Blank/0 leaves the row alone. */
+      y?: number;
+    }
+  | {
+      /**
+       * Hold until a CSS selector is on the page and has a box, so the next step is not run
+       * against a page that has not finished rendering what it needs.
+       */
+      type: "web_wait_element";
+      selector: string;
+      matchText?: string;
+      /** How long to wait before giving up. Blank/0 waits 30s. */
+      waitMs?: number;
+    }
+  | {
+      /** AI reads a screenshot and decides which control to press. */
+      type: "ai_web_button";
+      /** Optional steer, e.g. "the login button". Blank lets the AI judge on its own. */
+      hint?: string;
+    }
+  | {
+      /**
+       * Press a Cloudflare Turnstile checkbox on the page ("Verify you are human"), wherever
+       * it sits. No AI: the widget is found through the browser's own protocol, which reaches
+       * inside the cross-origin frame it draws in, and the checkbox is clicked at its known
+       * place in the widget. Prefer this to `ai_web_click_xy` for a Turnstile.
+       */
+      type: "web_turnstile";
+    }
+  | {
+      /**
+       * AI reads a screenshot and gives back a pixel position, which is clicked exactly.
+       * The page is ruled with a labelled grid before the shot so the figure is read off
+       * the picture rather than estimated.
+       */
+      type: "ai_web_click_xy";
+      /** Optional steer, e.g. "the verify-you-are-human checkbox". Blank lets the AI judge. */
+      hint?: string;
+    }
+  | {
+      /** AI reads a screenshot and decides which field to type into. */
+      type: "ai_web_input";
+      /** Optional steer, e.g. "the password box". Blank lets the AI judge on its own. */
+      hint?: string;
+      /** Text to type. Blank lets the AI decide from the page (e.g. a captcha it can read). */
+      text?: string;
+    };
 
 /** What one `open_url` sub-step did, with the page as it looked afterwards. */
 export type WebStepLog = {
@@ -508,6 +691,7 @@ export type WebStepLog = {
 };
 
 export type CustomConfig = {
+  maxWaitMs?: number;
   actions: CustomAction[];
   /**
    * Cleanup chain run once after `actions` is done with, whether it succeeded, ran out of

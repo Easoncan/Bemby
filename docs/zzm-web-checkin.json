@@ -1,36 +1,142 @@
 {
+  "maxWaitMs": 240000,
   "maxRetries": 1,
   "actions": [
     {
-      "type": "open_url",
+      "type": "web_open",
+      "session": "panel",
       "url": "https://user.zzm.li/",
       "maxWaitMs": 120000,
       "maxRetries": 1,
-      "tryAllProxies": false,
-      "successContains": "今日已签到",
+      "tryAllProxies": false
+    },
+    {
+      "type": "web_steps",
+      "session": "panel",
       "steps": [
         {
-          "type": "web_telegram_login",
-          "selector": ".web-login-command code",
-          "loginSelector": ".web-login-telegram-button",
-          "successSelector": ".web-account-header",
-          "contact": "zzmeb_bot",
-          "commandPrefix": "/login",
-          "confirmButton": "确认登录",
-          "waitMs": 60000
+          "type": "web_extract",
+          "selector": ".web-account-header",
+          "source": "exists",
+          "saveAs": "logged_in",
+          "sensitive": false
+        }
+      ]
+    },
+    {
+      "type": "web_steps",
+      "session": "panel",
+      "when": {
+        "variable": "logged_in",
+        "operator": "equals",
+        "value": "false"
+      },
+      "steps": [
+        {
+          "type": "web_button",
+          "selector": ".web-login-telegram-button"
         },
+        {
+          "type": "web_wait_element",
+          "selector": ".web-login-command code",
+          "waitMs": 15000
+        },
+        {
+          "type": "web_extract",
+          "selector": ".web-login-command code",
+          "source": "text",
+          "saveAs": "login_command",
+          "sensitive": true
+        }
+      ]
+    },
+    {
+      "type": "send_contact_message",
+      "id": "login_send",
+      "contact": "zzmeb_bot",
+      "content": "${vars.login_command}",
+      "maxRetries": 1,
+      "when": {
+        "variable": "logged_in",
+        "operator": "equals",
+        "value": "false"
+      }
+    },
+    {
+      "type": "click_message_button",
+      "contact": "zzmeb_bot",
+      "button": "确认登录",
+      "afterStep": "login_send",
+      "match": "exact",
+      "maxWaitMs": 30000,
+      "maxRetries": 1,
+      "when": {
+        "variable": "logged_in",
+        "operator": "equals",
+        "value": "false"
+      }
+    },
+    {
+      "type": "web_steps",
+      "session": "panel",
+      "when": {
+        "variable": "logged_in",
+        "operator": "equals",
+        "value": "false"
+      },
+      "steps": [
+        {
+          "type": "web_wait_element",
+          "selector": ".web-account-header",
+          "waitMs": 30000
+        }
+      ]
+    },
+    {
+      "type": "web_steps",
+      "session": "panel",
+      "steps": [
         {
           "type": "web_wait_element",
           "selector": ".web-content .grid.grid-cols-2 button.h-11.rounded-2xl",
           "waitMs": 15000
         },
         {
-          "type": "web_button",
-          "selector": ".web-content .grid.grid-cols-2 button.h-11.rounded-2xl"
-        },
+          "type": "web_extract",
+          "selector": "button",
+          "matchText": "今日已签到",
+          "source": "exists",
+          "saveAs": "checked_in",
+          "sensitive": false
+        }
+      ]
+    },
+    {
+      "type": "web_steps",
+      "session": "panel",
+      "when": {
+        "variable": "checked_in",
+        "operator": "equals",
+        "value": "false"
+      },
+      "steps": [
         {
-          "type": "web_delay",
-          "waitMs": 2500
+          "type": "web_button",
+          "selector": "button",
+          "matchText": "立即签到"
+        }
+      ]
+    },
+    {
+      "type": "web_steps",
+      "session": "panel",
+      "successContains": "今日已签到",
+      "steps": [
+        {
+          "type": "web_wait_element",
+          "selector": "button",
+          "matchText": "今日已签到",
+          "waitMs": 15000
         }
       ]
     }

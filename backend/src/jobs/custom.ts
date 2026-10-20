@@ -1,6 +1,9 @@
 import { TelegramClient, Api, Logger, utils } from "telegram";
 import { createHash } from "node:crypto";
 import { sendTelegramWebLogin } from "./webTelegramLogin";
+import { WorkflowContext, checkDeadline, extractText, within, workflowDelay } from "./workflow/context";
+import { runBrowserAction } from "./workflow/browserExecutor";
+import { waitWorkflowReply, clickWorkflowReplyButton } from "./workflow/telegramSteps";
 import { LogLevel } from "telegram/extensions/Logger";
 import { StringSession } from "telegram/sessions";
 import type { TgProxy } from '../types';
@@ -696,7 +699,12 @@ export function stepNeedingBot(
       case "subscribe_channel":
       case "update_profile":
       case "delay":
+      case "web_open":
+      case "web_steps":
+      case "set_variable":
         return false;
+      case "wait_reply":
+        return !a.contact?.trim();
       case "open_url":
         return (a.steps ?? []).some((s) => s.type === "web_telegram_login" && !s.contact?.trim());
       default:
@@ -722,6 +730,16 @@ export async function runCustom(
 ): Promise<CustomJobLog> {
   const log: CustomJobLog = { steps: [] };
   const jobMaxRetries = config.maxRetries ?? 1;
+  const ids = new Set<string>();
+  for (const action of [...(config.actions ?? []), ...(config.finallyActions ?? [])]) {
+    if (action.id && (!WorkflowContext.validName(action.id) || ids.has(action.id)))
+      throw new Error(`Step identifiers must be valid and unique: ${action.id}`);
+    if (action.id) ids.add(action.id);
+  }
+  const usesWorkflow = !!config.maxWaitMs || [...(config.actions ?? []), ...(config.finallyActions ?? [])]
+    .some((a) => a.type === "web_open" || a.type === "web_steps" || a.type === "set_variable");
+  const deadline = usesWorkflow ? Date.now() + (config.maxWaitMs && config.maxWaitMs > 0 ? config.maxWaitMs : 300_000) : Infinity;
+  let runtime = new WorkflowContext(deadline, signal);
 
   const missing = stepNeedingBot(config.actions ?? [], botUsername);
   if (missing) {
@@ -756,7 +774,8 @@ export async function runCustom(
   );
 
   try {
-    await client.connect();
+    if (usesWorkflow) await within(() => client.connect(), deadline, signal);
+    else await client.connect();
 
     let lastJobError: unknown = null;
 
@@ -781,6 +800,15 @@ export async function runCustom(
       const actions =
         pass === "cleanup" ? config.finallyActions ?? [] : config.actions ?? [];
       if (pass === "cleanup" && actions.length === 0) break;
+      if (pass === "chain" && jobAttempt > 1) {
+        runtime.sanitize(log);
+        await runtime.close();
+        runtime = new WorkflowContext(deadline, signal);
+      }
+      if (pass === "cleanup") {
+        runtime.signal = undefined;
+        runtime.deadline = Date.now() + 30_000;
+      }
 
       // State shared across actions within this pass
       let lastMessages: Api.Message[] = [];
@@ -837,7 +865,39 @@ export async function runCustom(
           const t0 = Date.now();
 
           try {
+            checkDeadline(runtime.deadline, runtime.signal);
+            if (!runtime.matches(actions[i].when)) {
+              step.label = `Skip ${actions[i].id || actions[i].type}`;
+              step.result = "Skipped: condition did not match";
+              step.skipped = true;
+              actionSucceeded = true;
+              break;
+            }
+            // Content and URLs retain their original templates until random/AI expansion;
+            // page steps resolve individually so they can consume a preceding extraction.
+            const action = Object.fromEntries(Object.entries(actions[i]).map(([key, value]) => [
+              key, ["steps", "content", "url", "when", "id", "saveAs"].includes(key) ? value : runtime.render(value),
+            ])) as CustomAction;
+            if ("maxWaitMs" in action && Number.isFinite(runtime.deadline))
+              action.maxWaitMs = Math.max(1, Math.min(action.maxWaitMs || 120_000, runtime.deadline - Date.now()));
             switch (action.type) {
+              case "web_open":
+              case "web_steps": {
+                const resolved = action.type === "web_open" ? { ...action, url: runtime.render(expandCommand(action.url)) } : action;
+                await runBrowserAction(resolved, runtime, step, `${pass}:${i}`, {
+                  profileScope: createHash("sha256").update(sessionString).digest("hex"),
+                  proxyUrl: webProxyUrl, cfRun,
+                  aiLocate: async (image, prompt) => (await callAI([image], prompt, 512)).response,
+                });
+                break;
+              }
+              case "set_variable": {
+                const value = extractText(action.value, action.pattern, action.group);
+                runtime.set(action.name, value, action.sensitive !== false);
+                step.label = `Set variable ${action.name}`;
+                step.result = runtime.redact(value.slice(0, 200));
+                break;
+              }
               case "enter_captcha": {
                 const lengthHint = action.captchaLength
                   ? ` (${action.captchaLength} chars)`
@@ -926,14 +986,17 @@ export async function runCustom(
                     aiResult.text,
                   );
                 }
-                const expanded = expandCommand(content);
-                step.label = `Send: "${expanded}"`;
-                const sentCmd = await client.sendMessage(botUsername, {
+                const expanded = runtime.render(expandCommand(content));
+                step.label = runtime.redact(`Send: "${expanded}"`);
+                const sentCmd = await within(() => client.sendMessage(botUsername, {
                   message: expanded,
-                });
+                }), runtime.deadline, runtime.signal);
                 lastMessages = [];
                 lastButtonsMsg = null;
                 sendAnchor = anchorFromSent(sentCmd);
+                if (action.id) runtime.messages.set(action.id, {
+                  msgId: sentCmd.id, peerId: await within(() => client.getPeerId(botUsername), runtime.deadline, runtime.signal),
+                });
                 step.result = "Sent";
                 break;
               }
@@ -973,17 +1036,36 @@ export async function runCustom(
                     aiResult.text,
                   );
                 }
-                const expanded = expandCommand(content);
-                step.label = `Send to ${contact}: "${expanded}"`;
-                const sentContact = await client.sendMessage(entity, {
+                const expanded = runtime.render(expandCommand(content));
+                step.label = runtime.redact(`Send to ${contact}: "${expanded}"`);
+                const sentContact = await within(() => client.sendMessage(entity, {
                   message: expanded,
-                });
+                }), runtime.deadline, runtime.signal);
                 contactAnchors.set(contact, anchorFromSent(sentContact));
+                if (action.id) runtime.messages.set(action.id, {
+                  msgId: sentContact.id, peerId: await within(() => client.getPeerId(entity), runtime.deadline, runtime.signal),
+                });
                 step.result = "Sent";
                 break;
               }
 
               case "wait_reply": {
+                if (action.contact || action.afterStep || action.saveAs) {
+                  const contact = action.contact?.trim() || botUsername;
+                  const entity = await resolvePeerTarget(client, contact);
+                  const peerId = await client.getPeerId(entity);
+                  const last = action.contact ? contactAnchors.get(contact) : sendAnchor;
+                  const anchor = action.afterStep ? runtime.anchor(action.afterStep, peerId)
+                    : last ? { msgId: last.msgId, peerId } : undefined;
+                  if (!anchor) throw new Error("Send a message first, or set the reply's source step");
+                  const until = runtime.budget(`${pass}:${i}`, action.maxWaitMs);
+                  step.label = `Wait for a new reply from ${contact}`;
+                  const msg = await waitWorkflowReply(client, entity, anchor, action, until, runtime.signal);
+                  lastMessages = [msg];
+                  if (action.saveAs) runtime.set(action.saveAs, msg.message ?? "", action.sensitive !== false);
+                  step.result = action.saveAs ? `Saved reply to ${action.saveAs}` : "New Telegram reply received";
+                  break;
+                }
                 const { successContains, failContains } = action;
                 const hints = [
                   successContains ? `success: "${successContains}"` : "",
@@ -1059,21 +1141,7 @@ export async function runCustom(
 
               case "delay": {
                 step.label = `Delay ${action.waitMs}ms`;
-                await new Promise<void>((res, rej) => {
-                  if (signal?.aborted) {
-                    rej(new Error("Job cancelled"));
-                    return;
-                  }
-                  const timer = setTimeout(res, action.waitMs);
-                  signal?.addEventListener(
-                    "abort",
-                    () => {
-                      clearTimeout(timer);
-                      rej(new Error("Job cancelled"));
-                    },
-                    { once: true },
-                  );
-                });
+                await workflowDelay(action.waitMs, runtime.deadline, runtime.signal);
                 step.result = "Done";
                 break;
               }
@@ -1498,6 +1566,24 @@ export async function runCustom(
                 step.label = `Click button "${action.button}" from ${contact}`;
 
                 const entity = await resolvePeerTarget(client, contact);
+                if (action.afterStep) {
+                  const peerId = await client.getPeerId(entity);
+                  const anchor = runtime.anchor(action.afterStep, peerId);
+                  const until = runtime.budget(`${pass}:${i}`, action.maxWaitMs);
+                  const msg = await waitWorkflowReply(client, entity, anchor, {
+                    button: action.button, match: action.match ?? "exact", failContains: action.failContains,
+                  }, until, runtime.signal);
+                  step.result = await clickWorkflowReplyButton(client, entity, msg, action.button, action.match ?? "exact", until, runtime.signal);
+                  step.clickedButton = action.button;
+                  lastMessages = [msg];
+                  if (action.successContains) {
+                    const reply = await waitWorkflowReply(client, entity, anchor, {
+                      successContains: action.successContains, failContains: action.failContains,
+                    }, until, runtime.signal);
+                    lastMessages = [reply];
+                  }
+                  break;
+                }
                 const peer = await client.getInputEntity(entity);
                 const chatPeerId = await client.getPeerId(entity);
 
@@ -2642,7 +2728,7 @@ export async function runCustom(
                 } else {
                   // Placeholders expand as they do for a command, so one template URL can
                   // still carry a per-run value
-                  const rawUrl = expandCommand(action.url ?? "").trim();
+                  const rawUrl = runtime.render(expandCommand(action.url ?? "")).trim();
                   if (!rawUrl) throw new Error("This action needs a Mini App URL");
                   // Blank names the job's own bot, which is the common case: a template set
                   // up for one bot works for every account linked to it
@@ -2773,7 +2859,7 @@ export async function runCustom(
               case "open_url": {
                 // Placeholders are expanded the same way a command's are, so a URL can carry
                 // a random query value per run
-                const url = expandCommand(action.url ?? "").trim();
+                const url = runtime.render(expandCommand(action.url ?? "")).trim();
                 const webSteps = action.steps ?? [];
                 const cfHost = (() => {
                   try {
@@ -2820,6 +2906,7 @@ export async function runCustom(
 
                 const cf = await loadCheckinUrl(url, webProxyUrl, {
                   webSteps,
+                  variables: runtime,
                   ...(webSteps.some((s) => s.type === "web_telegram_login") ? {
                     profileScope: createHash("sha256").update(sessionString).digest("hex"),
                   } : {}),
@@ -2878,6 +2965,8 @@ export async function runCustom(
                 }
                 break;
               }
+              default:
+                throw new Error(`Unsupported custom action: ${(action as { type: string }).type}`);
             }
 
             actionSucceeded = true;
@@ -2909,6 +2998,7 @@ export async function runCustom(
               }
             }
           } finally {
+            runtime.sanitize(step);
             step.durationMs = Date.now() - t0;
           }
         }
@@ -2932,8 +3022,10 @@ export async function runCustom(
     if (lastJobError) throw lastJobError;
   } catch (err: any) {
     if (err?.message === "Job cancelled") throw err;
-    throw new CustomJobError(err?.message ?? String(err), log);
+    throw new CustomJobError(runtime.redact(err?.message ?? String(err)), log);
   } finally {
+    runtime.sanitize(log);
+    await runtime.close();
     // destroy, not disconnect -- only destroy stops the GramJS ping loop (issue #14)
     try {
       await client.destroy();

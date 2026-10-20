@@ -2,7 +2,7 @@
   <img src="docs/logo.png" width="200" alt="Bemby" />
 </p>
 
-# Bemby v1.0.6
+# Bemby v1.0.7
 
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Feasoncan%2Fbemby-2496ED?logo=github)](https://github.com/Easoncan/Bemby/pkgs/container/bemby)
 [![更新日志](https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E5%BF%97-%E6%9F%A5%E7%9C%8B-blue)](https://github.com/Easoncan/Bemby/blob/main/CHANGELOG.md)
@@ -66,7 +66,7 @@ Bemby可签到市面上所有的服（需要正确配置）。无论是TG内，�
   - **自动注册** — 监听群组里发布的注册码并抢注：注册码可用固定前缀（支持 `*` 通配）或正则匹配（有捕获组时取第 1 组）；发送前可即时清理（移除中文字符 / 移除指定字符），也可交给 AI 按群内上下文修正（删除干扰符号、替换字符、补全被拆分的码）；提交方式支持"点击注册按钮后发送"与"随启动命令一并发送"；可分别配置发送注册码前与发送用户名前要等待的机器人提示文字，避免机器人未就绪时白白浪费一个码；对于"先校验注册码、通过后才给出开始注册按钮"的机器人，可开启注册码通过后再点击一次按钮/链接（支持回调按钮与 ?start= 链接，可自定义匹配文字），并可选择该步骤是必需（找不到按钮即换下一个码）还是可选（仅记录并继续）；被标记为已使用的码自动作废，用户名支持随机占位符
 - **命令模板** — 支持在启动命令中嵌入随机占位符（`{word:N}`、`{num:N}`、`{alpha:N}`、`{uuid}`）
 - **AI 按钮识别** — 签到按钮文字设为 `{aiBtn}` 时，自动通过视觉大模型识别应点击的按钮（支持图片验证码类场景）；AI 返回结果与可用按钮不符时自动重试（最多不超过任务重试次数，硬性上限 5 次）；可在设置页面配置 API 地址、密钥和模型；支持配置多个服务商，默认模型报错时自动切换；默认模型精确锁定到具体的"服务商 + 模型"记录，避免不同服务商提供同名模型时用错凭据
-- **网页 Telegram 登录** — 网页动作新增 Telegram 登录子步骤：读取指定元素中的 `/login` 命令，通过任务账号发送给指定机器人，可精确点击新回复中的「确认登录」按钮，并等待网页登录成功；已登录时自动复用会话，Cookie 按账号隔离。适用于这只猫用户中心等网页与 Telegram 联动的签到；[这只猫配置示例](docs/zzm-web-checkin.json)作为自定义任务的 config 使用，关联已认证的 Telegram 账号即可
+- **通用网页与 Telegram 工作流** — 自定义任务可打开并保留命名网页会话，在网页与 Telegram 动作之间自由切换；读取文本、输入值、属性、地址或元素状态到变量，以 `${vars.name}` 引用；支持变量条件、正则提取、保存机器人回复与关联新回复按钮。变量按本次执行隔离，敏感内容在日志和截图中遮盖。[使用说明](docs/workflows.md) · [这只猫配置示例](docs/zzm-web-checkin.json)
 - **小程序（Mini App）** — 在 Messenger 中直接打开机器人的小程序：聊天头部按钮、左侧机器人菜单，以及贴在输入框旁的机器人菜单小程序，均由 Telegram 按当前账户签名后打开；可选择在 Bemby 内嵌或浏览器打开。内嵌前先探测目标是否允许被嵌入，不允许时经内置代理提供同一页面（剥掉阻止内嵌的响应头、注入小程序桥接、补齐主题/版本/平台等启动参数），并使用仅对该站点有效的一次性票据而非面板令牌；设置 `WEBVIEW_PUBLIC_ORIGIN` 可让小程序拥有自己的源以正确路由自身路径
 - **网页与小程序自动化** — 自定义任务可打开小程序（按钮、`t.me/<机器人>/<应用>` 链接、普通网址或机器人菜单）并在其中编排子步骤：点击、填写、等待元素、滚动、断言文字；支持 CSS 选择器与多语言标签候选；由内置的指纹修补浏览器（CloakBrowser）驱动，可按出口轮换代理以通过 Cloudflare 验证
 - **用 ID 指定私密群组** — 没有用户名也没有邀请链接的群组，可用群组 ID（`-100…`）指定：Messenger 资料面板提供一键复制，任务的群组/联系人字段均接受，由本账户的聊天列表解析
@@ -113,7 +113,7 @@ docker run -d \
   ghcr.io/easoncan/bemby:latest
 ```
 
-镜像发布到 GitHub 容器仓库（GHCR）：`ghcr.io/easoncan/bemby:latest`。生产环境建议使用明确版本标签，例如 `ghcr.io/easoncan/bemby:1.0.6`。
+镜像发布到 GitHub 容器仓库（GHCR）：`ghcr.io/easoncan/bemby:latest`。生产环境建议使用明确版本标签，例如 `ghcr.io/easoncan/bemby:1.0.7`。
 
 > `JWT_SECRET` 为必填项，且不能使用公开的占位值（如 `change-me-in-production`），否则应用将拒绝启动。请用 `openssl rand -hex 32` 生成。
 
@@ -460,7 +460,7 @@ docker run -d \
   ghcr.io/easoncan/bemby:latest
 ```
 
-Images are published to the GitHub Container Registry (GHCR): `ghcr.io/easoncan/bemby:latest`. For production, use a fixed version tag such as `ghcr.io/easoncan/bemby:1.0.6`.
+Images are published to the GitHub Container Registry (GHCR): `ghcr.io/easoncan/bemby:latest`. For production, use a fixed version tag such as `ghcr.io/easoncan/bemby:1.0.7`.
 
 > `JWT_SECRET` is required and must not be a publicly known placeholder (e.g. `change-me-in-production`), or the app refuses to start. Generate one with `openssl rand -hex 32`.
 

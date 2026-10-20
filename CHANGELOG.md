@@ -4,6 +4,16 @@ All notable changes to Bemby are documented here.
 
 ---
 
+## v1.0.7
+
+新增轻量通用工作流：命名网页会话可跨动作保留，网页与 Telegram 步骤通过 `${vars.name}` 变量传递数据。增加网页内容/属性/地址/可见状态提取、正则变量处理、动作执行条件，以及 Telegram 新回复保存与明确来源消息的按钮点击。步骤输出按会话关联，整链重试重置变量和消息锚点，任务结束、失败或取消后统一释放浏览器。敏感变量在文本日志和页面截图中遮盖。
+
+任务和模板编辑器支持全部新增字段，并保留 v1.0.6 登录步骤与原任务的执行方式。更新这只猫示例为普通步骤组合，支持已登录、已签到时跳过相应动作。
+
+Added lightweight decoupled workflows: retained named browser sessions, run-scoped variables, conditions, browser extraction, regex transforms, and Telegram reply capture with explicit message anchors. Browser and Telegram actions exchange data through variables. Retries reset attempt state, all owned browsers close on completion/failure/cancellation, and sensitive values are redacted in logs and masked in captures. The editor exposes the new capabilities; existing jobs remain compatible.
+
+---
+
 ## v1.0.6
 
 新增网页 Telegram 登录步骤：从配置的网页元素读取登录命令，由任务关联账号发送给指定机器人，可精确点击本次新回复中的确认按钮，并等待登录后的页面元素出现。已登录时复用会话，网页 Cookie 按 Telegram 账号与出口隔离。配置界面提供机器人、命令、登入按钮、确认按钮和成功元素设置；无需 AI 或剪贴板即可完成这只猫用户中心的登录签到。

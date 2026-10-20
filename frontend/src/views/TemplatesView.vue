@@ -249,6 +249,9 @@
               <label class="form-label">{{ t('jobs.custom.labelJobMaxRetries') }}</label>
               <input v-model.number="customJobMaxRetries" class="form-input" type="number" min="1" max="20" style="max-width:120px" />
               <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.jobMaxRetriesHint') }}</div>
+            <label class="form-label" style="margin-top:8px">{{ t('jobs.workflow.maxWait') }}</label>
+            <input v-model.number="customWorkflowMaxWaitMs" class="form-input" type="number" min="0" step="10000" placeholder="300000" />
+            <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.workflow.maxWaitHint') }}</div>
             </div>
 
             <div class="form-group">
@@ -858,6 +861,7 @@ watch(templates, () => {
 const customActions = ref<CustomActionForm[]>([]);
 const customFinallyActions = ref<CustomActionForm[]>([]);
 const customJobMaxRetries = ref(1);
+const customWorkflowMaxWaitMs = ref(0);
 
 /** Drop both chains. Every path that abandons the editor's state starts from here. */
 function resetCustomChains() {
@@ -1005,7 +1009,7 @@ function onJobTypeChange() {
   embyUaDropdown.value = '';
   tplProxyId.value = '';
   resetCustomChains();
-  customJobMaxRetries.value = 1;
+  customJobMaxRetries.value = 1; customWorkflowMaxWaitMs.value = 0;
   btnAiHint.value = '';
   tplCheckinSuccessContains.value = '';
   tplCheckinFailContains.value = '';
@@ -1109,6 +1113,7 @@ function buildConfig(): EmbywatchConfig | CustomConfig | AutoregConfig | null {
         : {}),
     };
     if (customJobMaxRetries.value > 1) cfg.maxRetries = customJobMaxRetries.value;
+    if (customWorkflowMaxWaitMs.value > 0) cfg.maxWaitMs = customWorkflowMaxWaitMs.value;
     return cfg;
   }
   if (form.jobType === 'checkin') {
@@ -1179,7 +1184,7 @@ function openAdd() {
   embyUaDropdown.value = '';
   tplProxyId.value = '';
   resetCustomChains();
-  customJobMaxRetries.value = 1;
+  customJobMaxRetries.value = 1; customWorkflowMaxWaitMs.value = 0;
   tplCheckinSuccessContains.value = '';
   tplCheckinFailContains.value = '';
   tplCheckinCfChallenge.value = false;
@@ -1247,12 +1252,13 @@ function openEdit(tpl: JobTemplate) {
         const cfg = JSON.parse(tpl.config) as CustomConfig & { proxyId?: string };
         tplProxyId.value = cfg.proxyId ?? '';
         customJobMaxRetries.value = cfg.maxRetries ?? 1;
+        customWorkflowMaxWaitMs.value = cfg.maxWaitMs ?? 0;
         customActions.value = cfg.actions.map(actionFromConfig);
         customFinallyActions.value = (cfg.finallyActions ?? []).map(actionFromConfig);
-      } catch { resetCustomChains(); customJobMaxRetries.value = 1; }
+      } catch { resetCustomChains(); customJobMaxRetries.value = 1; customWorkflowMaxWaitMs.value = 0; }
     } else {
       resetCustomChains();
-      customJobMaxRetries.value = 1;
+      customJobMaxRetries.value = 1; customWorkflowMaxWaitMs.value = 0;
     }
   } else if (tpl.jobType === 'autoreg') {
     Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true, realWatch: false, sequencePlay: false, library: '' });

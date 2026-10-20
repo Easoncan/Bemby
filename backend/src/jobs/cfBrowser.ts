@@ -1087,24 +1087,26 @@ export async function launchCfBrowser(
     }
     await page.bringToFront().catch(() => {});
 
+    let closing: Promise<void> | undefined;
     const launched: LaunchedBrowser = {
       context,
       page,
       key,
       tier: usedTier,
       geo,
-      close: async () => {
+      close: () => closing ??= (async () => {
         // Bounded: a wedged renderer can leave close() pending, and everything below it --
         // the licence seat above all -- would then be held for the life of the process.
+        let timer: ReturnType<typeof setTimeout> | undefined;
         await Promise.race([
           context.close().catch(() => {}),
-          new Promise((r) => setTimeout(r, CLOSE_TIMEOUT_MS)),
-        ]);
+          new Promise((r) => { timer = setTimeout(r, CLOSE_TIMEOUT_MS); }),
+        ]).finally(() => clearTimeout(timer));
         proxy.close();
         profile.release();
         lease.release();
         liveBrowsers.delete(launched);
-      },
+      })(),
     };
     liveBrowsers.add(launched);
     return launched;

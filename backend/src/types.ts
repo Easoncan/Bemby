@@ -82,7 +82,13 @@ export type JobTemplate = {
   runEveryDaysMax?: number | null;
 };
 
-export type CustomAction =
+export type ActionCondition = {
+  variable: string;
+  operator: "equals" | "not_equals" | "contains" | "exists" | "not_exists";
+  value?: string;
+};
+
+export type CustomAction = (
   | { type: "send_command"; content: string; maxRetries?: number }
   | {
       // Send a message/command to a specific contact (bot/group/user), rather than the
@@ -97,6 +103,10 @@ export type CustomAction =
   // anchor; -N = also the N most recent incoming messages before the anchor.
   | {
       type: "wait_reply";
+      contact?: string;
+      afterStep?: string;
+      saveAs?: string;
+      sensitive?: boolean;
       maxWaitMs: number;
       successContains?: string;
       failContains?: string;
@@ -120,6 +130,8 @@ export type CustomAction =
       // rather than from the job's configured bot. Seeds from the contact's last received
       // message and otherwise waits up to maxWaitMs for an incoming one with buttons.
       type: "click_message_button";
+      afterStep?: string;
+      match?: "exact" | "contains";
       contact: string;
       button: string;
       maxRetries: number;
@@ -266,7 +278,34 @@ export type CustomAction =
       /** New bio; blank clears it. Supports {word:N} {num:N} {alpha:N} {uuid}. */
       about?: string;
       maxRetries?: number;
-    };
+    }
+  | {
+      type: "web_open";
+      session: string;
+      url: string;
+      maxWaitMs?: number;
+      maxRetries?: number;
+      proxyId?: string;
+      tryAllProxies?: boolean;
+    }
+  | {
+      type: "web_steps";
+      session: string;
+      steps: WebStep[];
+      successContains?: string;
+      failContains?: string;
+      maxWaitMs?: number;
+      maxRetries?: number;
+    }
+  | {
+      type: "set_variable";
+      name: string;
+      value: string;
+      pattern?: string;
+      group?: number;
+      sensitive?: boolean;
+    }
+) & { id?: string; when?: ActionCondition };
 
 /**
  * One sub-step of `open_url`, run against the loaded page.
@@ -279,6 +318,18 @@ export type CustomAction =
  * checkbox), or one painted on a canvas, none of which any selector can number.
  */
 export type WebStep =
+  | {
+      type: "web_extract";
+      selector?: string;
+      matchText?: string;
+      source: "text" | "value" | "attribute" | "url" | "exists";
+      attribute?: string;
+      pattern?: string;
+      group?: number;
+      saveAs: string;
+      sensitive?: boolean;
+      waitMs?: number;
+    }
   | {
       /** Read a login command, confirm it through this account's bot, and await the page. */
       type: "web_telegram_login";
@@ -307,6 +358,7 @@ export type WebStep =
       /** Press a control named by a CSS selector. */
       type: "web_button";
       selector: string;
+      matchText?: string;
     }
   | {
       /** Sit still for a while, for a page that needs a moment between steps. */
@@ -332,6 +384,7 @@ export type WebStep =
        */
       type: "web_wait_element";
       selector: string;
+      matchText?: string;
       /** How long to wait before giving up. Blank/0 waits 30s. */
       waitMs?: number;
     }
@@ -386,6 +439,8 @@ export type WebStepLog = {
 };
 
 export type CustomConfig = {
+  /** Total time across all workflow steps and retries. */
+  maxWaitMs?: number;
   actions: CustomAction[];
   /**
    * Cleanup chain run once after `actions` is done with, whether it succeeded, ran out of
@@ -464,6 +519,7 @@ export type AutoregConfig = {
 };
 
 export type CustomStepLog = {
+  skipped?: boolean;
   step: number;
   /**
    * Which list the step came from: absent for the main chain, "cleanup" for one of the finally

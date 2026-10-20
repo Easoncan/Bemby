@@ -10,7 +10,7 @@
         <span class="web-step-num">{{ i + 1 }}</span>
         <select v-model="s.type" class="form-select web-step-type" @change="onTypeChange(s)">
           <option
-            v-for="ty in WEB_STEP_TYPES"
+            v-for="ty in availableTypes"
             :key="ty"
             :value="ty"
             :disabled="aiKeyMissing && AI_WEB_STEP_TYPES.includes(ty)"
@@ -45,7 +45,7 @@
       </div>
 
       <!-- CSS selector: every type but the AI ones and the plain delay -->
-      <div v-if="s.type === 'web_input' || s.type === 'web_button' || s.type === 'web_wait_element' || s.type === 'web_telegram_login'">
+      <div v-if="s.type === 'web_input' || s.type === 'web_button' || s.type === 'web_wait_element' || s.type === 'web_telegram_login' || (s.type === 'web_extract' && s.extractSource !== 'url')">
         <label class="form-label">{{ t("jobs.web.labelSelector") }}</label>
         <input
           v-model.trim="s.selector"
@@ -55,6 +55,31 @@
         <div style="font-size: 11px; color: #aaa; margin-top: 3px">
           {{ t("jobs.web.selectorHint") }}
         </div>
+      </div>
+
+      <div v-if="s.type === 'web_button' || s.type === 'web_wait_element' || s.type === 'web_extract'" style="margin-top:8px">
+        <label class="form-label">{{ t('jobs.workflow.matchText') }}</label>
+        <input v-model="s.matchText" class="form-input" :placeholder="t('jobs.workflow.matchTextHint')" />
+      </div>
+
+      <div v-if="s.type === 'web_extract'" style="margin-top:8px">
+        <label class="form-label">{{ t('jobs.workflow.source') }}</label>
+        <select v-model="s.extractSource" class="form-select">
+          <option v-for="source in ['text','value','attribute','url','exists']" :key="source" :value="source">{{ t('jobs.workflow.source_' + source) }}</option>
+        </select>
+        <div v-if="s.extractSource === 'attribute'" style="margin-top:8px">
+          <label class="form-label">{{ t('jobs.workflow.attribute') }}</label>
+          <input v-model.trim="s.attribute" class="form-input" placeholder="href" />
+        </div>
+        <label class="form-label" style="margin-top:8px">{{ t('jobs.workflow.saveAs') }}</label>
+        <input v-model.trim="s.saveAs" class="form-input" placeholder="login_command" />
+        <label class="form-label" style="margin-top:8px">{{ t('jobs.workflow.pattern') }}</label>
+        <input v-model="s.pattern" class="form-input" :placeholder="t('jobs.workflow.patternHint')" />
+        <input v-if="s.pattern" v-model.number="s.group" class="form-input" type="number" min="0" style="margin-top:6px" :placeholder="t('jobs.workflow.groupHint')" />
+        <label v-if="s.extractSource !== 'exists'" class="form-checkbox-label" style="margin-top:8px">
+          <input v-model="s.sensitive" type="checkbox" /> {{ t('jobs.workflow.sensitive') }}
+        </label>
+        <div style="font-size:11px;color:#888;margin-top:4px">{{ t('jobs.workflow.variableHint') }}</div>
       </div>
 
       <div v-if="s.type === 'web_telegram_login'" class="telegram-login-fields">
@@ -95,7 +120,7 @@
         </div>
       </div>
 
-      <div v-if="s.type === 'web_delay' || s.type === 'web_wait_element' || s.type === 'web_telegram_login'" style="margin-top: 8px">
+      <div v-if="s.type === 'web_delay' || s.type === 'web_wait_element' || s.type === 'web_telegram_login' || s.type === 'web_extract'" style="margin-top: 8px">
         <label class="form-label">{{
           s.type === "web_delay" ? t("jobs.web.labelDelay") : t("jobs.web.labelTimeout")
         }}</label>
@@ -163,6 +188,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { t } from "../i18n";
 import {
   AI_WEB_STEP_TYPES,
@@ -174,7 +200,8 @@ import {
 
 // The list is mutated in place: the parent holds it inside its own action form object, so
 // emitting a replacement would mean threading an update back through the action index.
-const props = defineProps<{ steps: WebStepForm[]; aiKeyMissing: boolean }>();
+const props = defineProps<{ steps: WebStepForm[]; aiKeyMissing: boolean; allowTelegramLogin?: boolean }>();
+const availableTypes = computed(() => WEB_STEP_TYPES.filter((type) => props.allowTelegramLogin !== false || type !== 'web_telegram_login'));
 
 function hintPlaceholder(type: WebStepType): string {
   if (type === "ai_web_input") return t("jobs.web.hintInputPlaceholder");
@@ -188,6 +215,7 @@ function add() {
 
 function onTypeChange(step: WebStepForm) {
   if (step.type === "web_telegram_login") step.waitMs = 60_000;
+  if (step.type === "web_extract") step.waitMs = 30_000;
 }
 
 function remove(i: number) {

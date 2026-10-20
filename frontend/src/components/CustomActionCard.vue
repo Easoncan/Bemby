@@ -21,6 +21,9 @@
         <option value="open_mini_app_url" :disabled="cfBrowserMissing">{{ t('jobs.custom.actionOpenMiniAppUrl') }}{{ cfBrowserMissing ? ' (' + t('jobs.noCfBrowser') + ')' : '' }}</option>
         <option value="open_bot_menu_app" :disabled="cfBrowserMissing">{{ t('jobs.custom.actionOpenBotMenuApp') }}{{ cfBrowserMissing ? ' (' + t('jobs.noCfBrowser') + ')' : '' }}</option>
         <option value="open_url" :disabled="cfBrowserMissing">{{ t('jobs.custom.actionOpenUrl') }}{{ cfBrowserMissing ? ' (' + t('jobs.noCfBrowser') + ')' : '' }}</option>
+        <option value="web_open" :disabled="cfBrowserMissing">{{ t('jobs.workflow.open') }}</option>
+        <option value="web_steps" :disabled="cfBrowserMissing">{{ t('jobs.workflow.continue') }}</option>
+        <option value="set_variable">{{ t('jobs.workflow.setVariable') }}</option>
       </select>
       <button type="button" class="btn btn-ghost btn-sm btn-icon" :disabled="index === 0" @click="emit('moveUp')"><i class="fa-solid fa-arrow-up"></i></button>
       <button type="button" class="btn btn-ghost btn-sm btn-icon" :disabled="index === count - 1" @click="emit('moveDown')"><i class="fa-solid fa-arrow-down"></i></button>
@@ -405,21 +408,26 @@
     </div>
 
     <!-- open_url -->
-    <div v-if="action.type === 'open_url'" class="custom-action-params">
-      <div class="form-group" style="margin-bottom:0">
+    <div v-if="action.type === 'open_url' || action.type === 'web_open' || action.type === 'web_steps'" class="custom-action-params">
+      <div v-if="action.type !== 'open_url'" class="form-group">
+        <label class="form-label">{{ t('jobs.workflow.session') }}</label>
+        <input v-model.trim="action.session" class="form-input" placeholder="panel" />
+        <div class="workflow-hint">{{ t('jobs.workflow.sessionHint') }}</div>
+      </div>
+      <div v-if="action.type !== 'web_steps'" class="form-group" style="margin-bottom:0">
         <label class="form-label">{{ t('jobs.web.labelUrl') }}</label>
         <input v-model.trim="action.url" class="form-input" :placeholder="t('jobs.web.urlPlaceholder')" />
         <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.web.urlHint') }}</div>
       </div>
-      <div class="form-group" style="margin-bottom:0;margin-top:10px">
-        <WebStepsEditor :steps="action.webSteps" :ai-key-missing="aiKeyMissing" />
+      <div v-if="action.type !== 'web_open'" class="form-group" style="margin-bottom:0;margin-top:10px">
+        <WebStepsEditor :steps="action.webSteps" :ai-key-missing="aiKeyMissing" :allow-telegram-login="action.type !== 'web_steps'" />
       </div>
-      <div class="form-group" style="margin-bottom:0;margin-top:8px">
+      <div v-if="action.type !== 'web_open'" class="form-group" style="margin-bottom:0;margin-top:8px">
         <label class="form-label">{{ t('jobs.custom.labelSuccessContains') }}</label>
         <input v-model.trim="action.successContains" class="form-input" :placeholder="t('jobs.custom.successContainsPlaceholder')" />
         <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.successContainsHint') }}</div>
       </div>
-      <div class="form-group" style="margin-bottom:0;margin-top:8px">
+      <div v-if="action.type !== 'web_open'" class="form-group" style="margin-bottom:0;margin-top:8px">
         <label class="form-label">{{ t('jobs.custom.labelFailContains') }}</label>
         <input v-model.trim="action.failContains" class="form-input" :placeholder="t('jobs.custom.failContainsPlaceholder')" />
         <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.failContainsHint') }}</div>
@@ -435,7 +443,7 @@
         </div>
       </div>
       <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.miniAppMaxWaitHint') }}</div>
-      <div class="form-group" style="margin-bottom:0;margin-top:8px">
+      <div v-if="action.type !== 'web_steps'" class="form-group" style="margin-bottom:0;margin-top:8px">
         <label class="form-label">{{ t('jobs.custom.labelMiniAppProxy') }}</label>
         <select v-model="action.miniAppProxyId" class="form-select">
           <option value="">{{ t('jobs.custom.miniAppProxyJob') }}</option>
@@ -444,7 +452,7 @@
         </select>
         <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.miniAppProxyHint') }}</div>
       </div>
-      <div class="form-group" style="margin-bottom:0;margin-top:8px">
+      <div v-if="action.type !== 'web_steps'" class="form-group" style="margin-bottom:0;margin-top:8px">
         <label class="form-checkbox-label">
           <input type="checkbox" v-model="action.miniAppTryAllProxies" />
           {{ t('jobs.custom.labelMiniAppTryAll') }}
@@ -452,6 +460,58 @@
         <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.miniAppTryAllHint') }}</div>
       </div>
     </div>
+
+    <div v-if="action.type === 'set_variable'" class="custom-action-params">
+      <label class="form-label">{{ t('jobs.workflow.saveAs') }}</label>
+      <input v-model.trim="action.variableName" class="form-input" placeholder="code" />
+      <label class="form-label" style="margin-top:8px">{{ t('jobs.workflow.value') }}</label>
+      <input v-model="action.variableValue" class="form-input" placeholder="${vars.reply}" />
+      <label class="form-label" style="margin-top:8px">{{ t('jobs.workflow.pattern') }}</label>
+      <input v-model="action.pattern" class="form-input" :placeholder="t('jobs.workflow.patternHint')" />
+      <input v-if="action.pattern" v-model.number="action.group" class="form-input" type="number" min="0" style="margin-top:6px" :placeholder="t('jobs.workflow.groupHint')" />
+      <label class="form-checkbox-label" style="margin-top:8px"><input v-model="action.sensitive" type="checkbox" /> {{ t('jobs.workflow.sensitive') }}</label>
+    </div>
+
+    <details class="workflow-options" :open="Boolean(action.id || action.conditionVariable || action.afterStep || action.saveAs)">
+      <summary>{{ t('jobs.workflow.options') }}</summary>
+      <div class="workflow-hint">{{ t('jobs.workflow.variableHint') }}</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ t('jobs.workflow.stepId') }}</label>
+          <input v-model.trim="action.id" class="form-input" placeholder="login_send" />
+        </div>
+        <div v-if="action.type === 'wait_reply' || action.type === 'click_message_button'" class="form-group">
+          <label class="form-label">{{ t('jobs.workflow.afterStep') }}</label>
+          <input v-model.trim="action.afterStep" class="form-input" placeholder="login_send" />
+        </div>
+      </div>
+      <div v-if="action.type === 'click_message_button' && action.afterStep" class="form-group">
+        <label class="form-label">{{ t('jobs.workflow.buttonMatch') }}</label>
+        <select v-model="action.buttonMatch" class="form-select">
+          <option value="exact">{{ t('jobs.workflow.exact') }}</option>
+          <option value="contains">{{ t('jobs.workflow.contains') }}</option>
+        </select>
+      </div>
+      <div v-if="action.type === 'wait_reply'" class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ t('jobs.custom.labelContact') }}</label>
+          <input v-model.trim="action.contact" class="form-input" :placeholder="t('jobs.workflow.defaultBot')" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ t('jobs.workflow.saveReply') }}</label>
+          <input v-model.trim="action.saveAs" class="form-input" placeholder="reply" />
+          <label v-if="action.saveAs" class="form-checkbox-label"><input v-model="action.sensitive" type="checkbox" /> {{ t('jobs.workflow.sensitive') }}</label>
+        </div>
+      </div>
+      <label class="form-label">{{ t('jobs.workflow.when') }}</label>
+      <input v-model.trim="action.conditionVariable" class="form-input" :placeholder="t('jobs.workflow.whenHint')" />
+      <div v-if="action.conditionVariable" class="form-row" style="margin-top:6px">
+        <select v-model="action.conditionOperator" class="form-select">
+          <option v-for="op in ['equals','not_equals','contains','exists','not_exists']" :key="op" :value="op">{{ t('jobs.workflow.operator_' + op) }}</option>
+        </select>
+        <input v-if="action.conditionOperator !== 'exists' && action.conditionOperator !== 'not_exists'" v-model="action.conditionValue" class="form-input" placeholder="false" />
+      </div>
+    </details>
 
     <!-- update_profile -->
     <div v-if="action.type === 'update_profile'" class="custom-action-params">
@@ -488,6 +548,9 @@ const emit = defineEmits<{ moveUp: []; moveDown: []; remove: [] }>();
 </script>
 
 <style scoped>
+.workflow-options { margin: 10px 0 0 26px; font-size: 12px; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+.workflow-options summary { cursor: pointer; color: #64748b; margin-bottom: 8px; }
+.workflow-hint { font-size: 11px; color: #888; margin: 4px 0 8px; }
 .custom-action-card {
   border: 1px solid #e5e7eb;
   border-radius: 8px;

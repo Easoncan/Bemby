@@ -19,12 +19,20 @@ export type WebStepForm = {
   contact: string;
   commandPrefix: string;
   confirmButton: string;
+  matchText: string;
+  extractSource: "text" | "value" | "attribute" | "url" | "exists";
+  attribute: string;
+  pattern: string;
+  group: number | "";
+  saveAs: string;
+  sensitive: boolean;
 };
 
 /** Order the editor offers them in: the selector steps first, then waits, then the AI ones. */
 export const WEB_STEP_TYPES: WebStepType[] = [
   "web_input",
   "web_button",
+  "web_extract",
   "web_telegram_login",
   "web_wait_element",
   "web_delay",
@@ -55,13 +63,22 @@ export function defaultWebStep(): WebStepForm {
     successSelector: "",
     contact: "",
     commandPrefix: "/login",
-    confirmButton: "",
+    confirmButton: "", matchText: "", extractSource: "text", attribute: "", pattern: "", group: "", saveAs: "", sensitive: true,
   };
 }
 
 /** Drops the fields the chosen type does not use, so the saved config stays readable. */
 export function webStepToConfig(s: WebStepForm): WebStep {
   switch (s.type) {
+    case "web_extract":
+      return {
+        type: s.type, source: s.extractSource, saveAs: s.saveAs.trim(), sensitive: s.sensitive,
+        ...(s.selector.trim() ? { selector: s.selector.trim() } : {}),
+        ...(s.matchText.trim() ? { matchText: s.matchText.trim() } : {}),
+        ...(s.attribute.trim() ? { attribute: s.attribute.trim() } : {}),
+        ...(s.pattern ? { pattern: s.pattern, ...(s.group !== "" ? { group: s.group } : {}) } : {}),
+        waitMs: s.waitMs,
+      };
     case "web_telegram_login":
       return {
         type: s.type,
@@ -76,7 +93,7 @@ export function webStepToConfig(s: WebStepForm): WebStep {
     case "web_input":
       return { type: "web_input", selector: s.selector.trim(), text: s.text };
     case "web_button":
-      return { type: "web_button", selector: s.selector.trim() };
+      return { type: "web_button", selector: s.selector.trim(), ...(s.matchText.trim() ? { matchText: s.matchText.trim() } : {}) };
     case "web_delay":
       return { type: "web_delay", waitMs: s.waitMs };
     case "web_turnstile":
@@ -114,6 +131,8 @@ export function webStepsToConfig(steps: WebStepForm[]): WebStep[] {
 export function webStepFromConfig(s: WebStep): WebStepForm {
   const base = defaultWebStep();
   switch (s.type) {
+    case "web_extract":
+      return { ...base, type: s.type, selector: s.selector ?? "", matchText: s.matchText ?? "", extractSource: s.source, attribute: s.attribute ?? "", pattern: s.pattern ?? "", group: s.group ?? "", saveAs: s.saveAs, sensitive: s.sensitive !== false, waitMs: s.waitMs ?? 30000 };
     case "web_telegram_login":
       return {
         ...base, type: s.type, selector: s.selector,
@@ -124,7 +143,7 @@ export function webStepFromConfig(s: WebStep): WebStepForm {
     case "web_input":
       return { ...base, type: s.type, selector: s.selector, text: s.text };
     case "web_button":
-      return { ...base, type: s.type, selector: s.selector };
+      return { ...base, type: s.type, selector: s.selector, matchText: s.matchText ?? "" };
     case "web_delay":
       return { ...base, type: s.type, waitMs: s.waitMs };
     case "web_turnstile":
@@ -132,7 +151,7 @@ export function webStepFromConfig(s: WebStep): WebStepForm {
     case "web_scroll":
       return { ...base, type: s.type, scrollX: s.x ?? 0, scrollY: s.y ?? 0 };
     case "web_wait_element":
-      return { ...base, type: s.type, selector: s.selector, waitMs: s.waitMs ?? 30000 };
+      return { ...base, type: s.type, selector: s.selector, matchText: s.matchText ?? "", waitMs: s.waitMs ?? 30000 };
     case "ai_web_button":
     case "ai_web_click_xy":
       return { ...base, type: s.type, hint: s.hint ?? "" };

@@ -14,6 +14,8 @@ import {
 } from "../tg/proxyProviders";
 import type { WebStep, WebStepLog } from "../types";
 import { runTelegramWebLogin, type TelegramLoginSender } from "./webTelegramLogin";
+import { extractWebValue } from "./workflow/browserSteps";
+import { checkDeadline, type WorkflowVariables } from "./workflow/context";
 
 // Completes a checkin that hands back a URL behind Cloudflare's "I am not a bot"
 // (managed challenge / Turnstile). CloakBrowser -- a Chromium whose fingerprint is patched
@@ -211,6 +213,9 @@ export function cfRefusedFor(state: CfRunState, host: string): Set<string> {
 }
 
 export type LoadOptions = {
+  variables?: WorkflowVariables;
+  /** Transfer a successful browser to a workflow resource owner. Failed loads still close. */
+  retainBrowser?: (browser: LaunchedBrowser) => void;
   /** Isolate authenticated website cookies from other Telegram accounts. */
   profileScope?: string;
   sendTelegramLogin?: TelegramLoginSender;
@@ -441,16 +446,19 @@ async function launchAlignedBrowser(
  * page and dispatching real pointer events avoids the wait entirely, and is closer to what
  * a person does anyway.
  */
-async function clickElement(page: Page, selector: string): Promise<boolean> {
+async function clickElement(page: Page, selector: string, matchText?: string): Promise<boolean> {
   const box = await page
-    .evaluate((sel: string) => {
-      const el = document.querySelector(sel) as HTMLElement | null;
+    .evaluate(({ sel, text }) => {
+      const el = (Array.from(document.querySelectorAll(sel)) as HTMLElement[]).find((element) => {
+        const r = element.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && getComputedStyle(element).visibility !== "hidden" && (!text || (element.innerText ?? element.textContent ?? "").trim() === text);
+      });
       if (!el) return null;
       el.scrollIntoView({ block: "center", inline: "center" });
       const r = el.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) return null;
       return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-    }, selector)
+    }, { sel: selector, text: matchText })
     .catch(() => null);
   if (!box) return false;
   // Approach then press, as a pointer would
@@ -1895,6 +1903,7 @@ async function typeInto(page: Page, selector: string, text: string): Promise<boo
 }
 
 export type WebStepHooks = {
+  variables?: WorkflowVariables;
   sendTelegramLogin?: TelegramLoginSender;
   signal?: AbortSignal;
   /**
@@ -1917,16 +1926,30 @@ export async function runWebSteps(
   hooks: WebStepHooks,
 ): Promise<{ logs: WebStepLog[]; ok: boolean; failure?: string }> {
   const tune = cfTuning();
+  const capture = hooks.variables?.screenshot ?? screenshotOf;
   const logs: WebStepLog[] = [];
   let failure: string | undefined;
 
-  for (const step of steps) {
+  for (const rawStep of steps) {
+    if (hooks.signal?.aborted) {
+      failure = "Job cancelled";
+      break;
+    }
     if (msLeft(deadline) <= 0) {
       failure = "ran out of time before the page steps finished";
       break;
     }
 
-    const log: WebStepLog = { type: step.type, label: describeWebStep(step) };
+    // Resolve at execution time: an earlier page step may have just produced a variable.
+    let resolved: WebStep;
+    try { resolved = hooks.variables?.render(rawStep) ?? rawStep; }
+    catch (err: any) {
+      failure = String(err?.message ?? err);
+      logs.push({ type: rawStep.type, label: describeWebStep(rawStep), error: failure });
+      break;
+    }
+    const step = resolved;
+    const log: WebStepLog = { type: step.type, label: hooks.variables?.redact(describeWebStep(step)) ?? describeWebStep(step) };
     logs.push(log);
     // Set when a step leaves something drawn on the page for its own screenshot to show
     let marked = false;
@@ -1936,12 +1959,16 @@ export async function runWebSteps(
     if (step.type !== "web_delay" && (await interstitialOnPage(page))) {
       log.error = "a full-page Cloudflare challenge is covering the site";
       failure = `${log.label}: ${log.error}`;
-      log.screenshot = await screenshotOf(page);
+      log.screenshot = await capture(page);
       break;
     }
 
     try {
       switch (step.type) {
+        case "web_extract": {
+          log.outcome = await extractWebValue(page, step, deadline, hooks.variables, hooks.signal);
+          break;
+        }
         case "web_telegram_login": {
           log.outcome = await runTelegramWebLogin(page, step, deadline, hooks.sendTelegramLogin, hooks.signal);
           break;
@@ -1949,7 +1976,7 @@ export async function runWebSteps(
         case "web_button": {
           const selector = step.selector.trim();
           if (!selector) throw new Error("no CSS selector given");
-          if (!(await clickElement(page, selector)))
+          if (!(await clickElement(page, selector, step.matchText)))
             throw new Error(`nothing matching \`${selector}\` is on the page`);
           log.outcome = `pressed \`${selector}\``;
           break;
@@ -1958,6 +1985,7 @@ export async function runWebSteps(
         case "web_input": {
           const selector = step.selector.trim();
           if (!selector) throw new Error("no CSS selector given");
+          if (hooks.variables?.isSensitive(step.text)) hooks.variables.mask(page, selector);
           if (!(await typeInto(page, selector, step.text)))
             throw new Error(`nothing matching \`${selector}\` could be typed into`);
           log.outcome = `typed ${maskForLog(step.text, selector)} into \`${selector}\``;
@@ -1989,12 +2017,10 @@ export async function runWebSteps(
           let seen = false;
           for (;;) {
             seen = await page
-              .evaluate((sel: string) => {
-                const el = document.querySelector(sel) as HTMLElement | null;
-                if (!el) return false;
+              .evaluate(({ sel, text }) => (Array.from(document.querySelectorAll(sel)) as HTMLElement[]).some((el) => {
                 const r = el.getBoundingClientRect();
-                return r.width > 0 && r.height > 0;
-              }, selector)
+                return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden" && (!text || (el.innerText ?? el.textContent ?? "").trim() === text);
+              }), { sel: selector, text: step.matchText })
               .catch(() => false);
             if (seen || Date.now() >= until) break;
             // Nothing the site owns is on an interstitial, so waiting out the rest of the
@@ -2040,7 +2066,7 @@ export async function runWebSteps(
             );
           }
           // The model is shown the marked-up page; the clean shot is kept for the log
-          const marked = await screenshotOf(page, 60);
+          const marked = await capture(page, 60);
           await clearWebMarkBadges(page);
           if (!marked) throw new Error("the page could not be captured for the AI");
 
@@ -2161,15 +2187,16 @@ export async function runWebSteps(
         }
       }
     } catch (err: any) {
-      log.error = err?.message ?? String(err);
+      log.error = hooks.variables?.redact(err?.message ?? String(err)) ?? (err?.message ?? String(err));
       failure = `${log.label}: ${log.error}`;
     }
 
     // The page as it stands after the step, whether it worked or not -- a failed step is
     // exactly the one whose screenshot is worth having
     await sleep(tune.inAppStepMs, deadline);
-    if (logs.length <= MAX_WEB_SHOTS) log.screenshot = await screenshotOf(page);
+    if (logs.length <= MAX_WEB_SHOTS) log.screenshot = await capture(page);
     if (marked) await clearWebMarkBadges(page);
+    if (log.outcome && hooks.variables) log.outcome = hooks.variables.redact(log.outcome);
     if (failure) break;
   }
 
@@ -2181,6 +2208,8 @@ export async function runWebSteps(
 /** What the step is trying to do, for the log line. */
 function describeWebStep(step: WebStep): string {
   switch (step.type) {
+    case "web_extract":
+      return `Read ${step.source} into ${step.saveAs}`;
     case "web_telegram_login":
       return `Telegram web login${step.contact?.trim() ? ` via ${step.contact.trim()}` : ""}`;
     case "web_button":
@@ -2565,6 +2594,8 @@ async function attemptLoad(
     }
   })();
   let launched: LaunchedBrowser | undefined;
+  const onAbort = () => { void launched?.close().catch(() => {}); };
+  opts.signal?.addEventListener("abort", onAbort, { once: true });
   // Tells a browser that never started from one that started and then hit trouble: only
   // the latter says anything about the exit.
   let launchOk = false;
@@ -2582,6 +2613,7 @@ async function attemptLoad(
     // The clock and language of the exit are launch flags, so this settles them before
     // anything on the target is loaded
     launched = await launchAlignedBrowser(proxyUrl, budgetDeadline, opts.profileScope);
+    checkDeadline(budgetDeadline, opts.signal);
     launchOk = true;
     browserTier = launched.tier;
     const page = launched.page;
@@ -2707,6 +2739,7 @@ async function attemptLoad(
     let webFailure: string | undefined;
     if (opts.webSteps?.length && solved) {
       const run = await runWebSteps(page, opts.webSteps, budgetDeadline, {
+        variables: opts.variables,
         aiLocate: opts.aiLocate,
         sendTelegramLogin: opts.sendTelegramLogin,
         signal: opts.signal,
@@ -2796,7 +2829,7 @@ async function attemptLoad(
           { ok: solved && !webFailure, reason: solved ? webFailure : challengeRefused(challenged, navError) }
         : { ok: solved, reason: solved ? undefined : challengeRefused(challenged, navError) };
 
-    return {
+    const result: CheckinPageResult = {
       ok: verdict.ok,
       challenged,
       text,
@@ -2812,8 +2845,13 @@ async function attemptLoad(
       // meet it alike -- rotating the pool there only spends the budget.
       browserTier,
       exitRelated: solved && webFailure ? false : !!navError || (challenged && !verdict.ok) || !text.trim(),
-      screenshot: opts.screenshot ? await screenshotOf(page) : undefined,
+      screenshot: opts.screenshot ? await (opts.variables?.screenshot ?? screenshotOf)(page) : undefined,
     };
+    if (result.ok && opts.retainBrowser) {
+      opts.retainBrowser(launched);
+      launched = undefined;
+    }
+    return result;
   } catch (err: any) {
     const msg = err?.message ?? String(err);
     if (/not installed|executablePath|ENOENT|Could not find|Failed to launch/i.test(msg)) {
@@ -2845,6 +2883,7 @@ async function attemptLoad(
       exitRelated: true,
     };
   } finally {
+    opts.signal?.removeEventListener("abort", onAbort);
     await launched?.close();
   }
 }
@@ -2868,6 +2907,7 @@ export async function loadCheckinUrl(
   proxyUrl?: string,
   opts: LoadOptions = {},
 ): Promise<CheckinPageResult> {
+  if (opts.signal?.aborted) throw new Error("Job cancelled");
   const tune = cfTuning();
   const candidates: ProxyCandidate[] = opts.proxyCandidates?.length
     ? opts.proxyCandidates
@@ -2882,6 +2922,7 @@ export async function loadCheckinUrl(
   const refusedProxyIds: string[] = [];
 
   for (let i = 0; i < candidates.length; i++) {
+    if (opts.signal?.aborted) throw new Error("Job cancelled");
     const candidate = candidates[i];
     if (i > 0) {
       if (msLeft(deadline) < tune.minAttemptMs) {
@@ -2948,4 +2989,15 @@ export async function loadCheckinUrl(
   }
 
   return { ...last!, trace: [...trace], refusedProxyIds: [...refusedProxyIds] };
+}
+
+/** Opens a page whose lifetime belongs to a workflow rather than a single action. */
+export async function openWebSession(url: string, proxyUrl: string | undefined, opts: LoadOptions = {}): Promise<{ browser: LaunchedBrowser; result: CheckinPageResult }> {
+  let retained: LaunchedBrowser | undefined;
+  const result = await loadCheckinUrl(url, proxyUrl, { ...opts, retainBrowser: (browser) => { retained = browser; } });
+  if (!result.ok || !retained) {
+    await retained?.close();
+    throw new Error(result.reason ?? "Could not open web session");
+  }
+  return { browser: retained, result };
 }

@@ -30,6 +30,7 @@ import {
   cfRefusedFor,
   loadCheckinUrl,
   newCfRunState,
+  openWebSession,
 } from "../jobs/cloudflare";
 
 const CANDIDATES = [
@@ -96,6 +97,18 @@ beforeEach(() => {
 });
 
 describe("a solver browser that cannot start", () => {
+  it("transfers a successful browser to a workflow without closing it, preserving one-shot behavior", async () => {
+    const close = vi.fn().mockResolvedValue(undefined);
+    const browser = { ...fakeBrowser({ text: "A fully loaded website with enough content to be ready" }), geo: { tz: "UTC", lang: "en-US" }, close };
+    launchCfBrowser.mockResolvedValue(browser);
+    const opened = await openWebSession("https://example.com/app", undefined, { maxWaitMs: 5000 });
+    expect(opened.result.ok).toBe(true);
+    expect(close).not.toHaveBeenCalled();
+    await opened.browser.close();
+    expect(close).toHaveBeenCalledOnce();
+    await loadCheckinUrl("https://example.com/app", undefined, { maxWaitMs: 5000 });
+    expect(close).toHaveBeenCalledTimes(2);
+  });
   it("refuses no proxy and tries only one exit", async () => {
     launchCfBrowser.mockRejectedValue(new Error(SIGTRAP_FAILURE));
 

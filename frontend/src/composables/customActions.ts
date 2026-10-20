@@ -1,10 +1,10 @@
 // One row of a custom job's action chain, as the editor holds it: loose strings the form binds
 // to directly, converted to and from the config shape on the way in and out.
-import type { CustomAction } from '../api/client';
+import type { CustomAction, ActionCondition } from '../api/client';
 import { webStepsFromConfig, webStepsToConfig, type WebStepForm } from './webSteps';
 
 export type CustomActionForm = {
-  type: 'send_command' | 'send_contact_message' | 'wait_reply' | 'delay' | 'click_button' | 'click_message_button' | 'ai_multiple_btn' | 'enter_captcha' | 'join_group' | 'subscribe_channel' | 'update_profile' | 'open_mini_app' | 'open_mini_app_url' | 'open_bot_menu_app' | 'open_url';
+  type: 'send_command' | 'send_contact_message' | 'wait_reply' | 'delay' | 'click_button' | 'click_message_button' | 'ai_multiple_btn' | 'enter_captcha' | 'join_group' | 'subscribe_channel' | 'update_profile' | 'open_mini_app' | 'open_mini_app_url' | 'open_bot_menu_app' | 'open_url' | 'web_open' | 'web_steps' | 'set_variable';
   content: string;
   contentDropdown: string;
   contentCustom: string;
@@ -40,6 +40,19 @@ export type CustomActionForm = {
   webSteps: WebStepForm[];
   /** update_profile: new bio; blank clears it */
   profileAbout: string;
+  id: string;
+  session: string;
+  conditionVariable: string;
+  conditionOperator: ActionCondition["operator"];
+  conditionValue: string;
+  afterStep: string;
+  buttonMatch: "exact" | "contains";
+  saveAs: string;
+  variableName: string;
+  variableValue: string;
+  pattern: string;
+  group: number | "";
+  sensitive: boolean;
 };
 
 /**
@@ -59,13 +72,27 @@ export function defaultAction(): CustomActionForm {
     verifyButton: '', verifyWaitMs: 30000, channelId: '', appButton: '',
     miniAppMaxWaitMs: 300000, miniAppProxyId: '', miniAppTryAllProxies: true,
     url: '', webSteps: [],
-    profileAbout: '',
+    profileAbout: '', id: '', session: 'panel', conditionVariable: '', conditionOperator: 'equals', conditionValue: '',
+    afterStep: '', buttonMatch: 'exact', saveAs: '', variableName: '', variableValue: '', pattern: '', group: '', sensitive: true,
   };
 }
 
 /** A stored action as an editable row. An unknown type comes back as a blank row. */
 export function actionFromConfig(a: CustomAction): CustomActionForm {
+  return {
+    ...actionBodyFromConfig(a), id: a.id ?? '', conditionVariable: a.when?.variable ?? '',
+    conditionOperator: a.when?.operator ?? 'equals', conditionValue: a.when?.value ?? '',
+    ...((a.type === 'wait_reply' || a.type === 'click_message_button') ? { afterStep: a.afterStep ?? '' } : {}),
+    ...(a.type === 'click_message_button' ? { buttonMatch: a.match ?? 'exact' } : {}),
+    ...(a.type === 'wait_reply' ? { contact: a.contact ?? '', saveAs: a.saveAs ?? '', sensitive: a.sensitive !== false } : {}),
+  };
+}
+
+function actionBodyFromConfig(a: CustomAction): CustomActionForm {
   const base = defaultAction();
+  if (a.type === 'web_open') return { ...base, type: a.type, session: a.session, url: a.url, miniAppMaxWaitMs: a.maxWaitMs ?? 120000, maxRetries: a.maxRetries ?? 1, miniAppProxyId: a.proxyId ?? '', miniAppTryAllProxies: a.tryAllProxies ?? true };
+  if (a.type === 'web_steps') return { ...base, type: a.type, session: a.session, webSteps: webStepsFromConfig(a.steps), successContains: a.successContains ?? '', failContains: a.failContains ?? '', miniAppMaxWaitMs: a.maxWaitMs ?? 120000, maxRetries: a.maxRetries ?? 1 };
+  if (a.type === 'set_variable') return { ...base, type: a.type, variableName: a.name, variableValue: a.value, pattern: a.pattern ?? '', group: a.group ?? '', sensitive: a.sensitive !== false };
   if (a.type === 'send_command') {
     const aiInputMatch = a.content.match(/^\{aiInput(?::(\d+))?\}$/);
     if (aiInputMatch) return { ...base, type: 'send_command', content: a.content, contentDropdown: '{aiInput}', contentCustom: '', contentAiInputLength: aiInputMatch[1] ?? '', maxRetries: a.maxRetries ?? 1 };
@@ -106,6 +133,21 @@ export function actionFromConfig(a: CustomAction): CustomActionForm {
 
 /** An editable row as it is stored. Blank optional fields are left out rather than sent empty. */
 export function actionToConfig(a: CustomActionForm): CustomAction {
+  const body = actionBodyToConfig(a);
+  return {
+    ...body,
+    ...(a.id.trim() ? { id: a.id.trim() } : {}),
+    ...(a.conditionVariable.trim() ? { when: { variable: a.conditionVariable.trim(), operator: a.conditionOperator, value: a.conditionValue } } : {}),
+    ...((a.type === 'wait_reply' || a.type === 'click_message_button') && a.afterStep.trim() ? { afterStep: a.afterStep.trim() } : {}),
+    ...(a.type === 'click_message_button' && a.afterStep.trim() ? { match: a.buttonMatch } : {}),
+    ...(a.type === 'wait_reply' ? { ...(a.contact.trim() ? { contact: a.contact.trim() } : {}), ...(a.saveAs.trim() ? { saveAs: a.saveAs.trim(), sensitive: a.sensitive } : {}) } : {}),
+  } as CustomAction;
+}
+
+function actionBodyToConfig(a: CustomActionForm): CustomAction {
+  if (a.type === 'web_open') return { type: a.type, session: a.session.trim(), url: a.url.trim(), maxWaitMs: a.miniAppMaxWaitMs, maxRetries: a.maxRetries, ...(a.miniAppProxyId ? { proxyId: a.miniAppProxyId } : {}), tryAllProxies: a.miniAppTryAllProxies };
+  if (a.type === 'web_steps') return { type: a.type, session: a.session.trim(), steps: webStepsToConfig(a.webSteps), maxWaitMs: a.miniAppMaxWaitMs, maxRetries: a.maxRetries, ...(a.successContains.trim() ? { successContains: a.successContains.trim() } : {}), ...(a.failContains.trim() ? { failContains: a.failContains.trim() } : {}) };
+  if (a.type === 'set_variable') return { type: a.type, name: a.variableName.trim(), value: a.variableValue, ...(a.pattern ? { pattern: a.pattern, ...(a.group !== '' ? { group: a.group } : {}) } : {}), sensitive: a.sensitive };
   if (a.type === 'send_command') {
     let content: string;
     if (a.contentDropdown === '{aiInput}') {

@@ -653,6 +653,13 @@ function exitKey(proxyUrl?: string): string {
   return proxyUrl ? createHash("sha1").update(proxyUrl).digest("hex").slice(0, 12) : "direct";
 }
 
+/** Authenticated web pages must not inherit another Telegram account's cookies. */
+export function cfProfileKey(exit: string, scope?: string): string {
+  return scope
+    ? `account-${createHash("sha256").update(`${scope}\0${exit}`).digest("hex").slice(0, 24)}`
+    : exit;
+}
+
 /**
  * The device fingerprint seed for an exit. CloakBrowser picks a random one per launch,
  * which would hand the same site a different machine every run -- while the profile hands
@@ -910,6 +917,7 @@ export async function launchCfBrowser(
      * the best one it can get.
      */
     tier?: BuildTier;
+    profileScope?: string;
   } = {},
 ): Promise<LaunchedBrowser> {
   const tune = cfTuning();
@@ -930,7 +938,7 @@ export async function launchCfBrowser(
   const key = exitKey(proxyUrl);
   const geo = cfExitGeo(key);
   const locale = cfBrowserLang() ?? geo?.lang;
-  const profile = claimProfile(key);
+  const profile = claimProfile(cfProfileKey(key, opts.profileScope));
   const proxy = await resolveProxy(proxyUrl);
   // The keyed build first, on a seat of its own: one licence key is one concurrent
   // session, so a seat is held for as long as this browser lives.

@@ -476,6 +476,16 @@ export type CustomAction =
 
 /** One sub-step of `open_url`, run against the loaded page. */
 export type WebStep =
+  | {
+      type: "web_telegram_login";
+      selector: string;
+      loginSelector?: string;
+      successSelector: string;
+      contact?: string;
+      commandPrefix?: string;
+      confirmButton?: string;
+      waitMs?: number;
+    }
   | { type: "web_input"; selector: string; text: string }
   | { type: "web_button"; selector: string }
   | { type: "web_delay"; waitMs: number }

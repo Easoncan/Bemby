@@ -12,6 +12,11 @@ import type { CustomAction } from "../types";
 const url = "https://web.example-media.org/app";
 
 describe("stepNeedingBot", () => {
+  it("requires a login bot for Telegram webpage steps, or accepts an explicit step contact", () => {
+    const login = { type: "web_telegram_login" as const, selector: "code", successSelector: "#account" };
+    expect(stepNeedingBot([{ type: "open_url", url, steps: [login] }], "")).toEqual({ at: 0, type: "open_url" });
+    expect(stepNeedingBot([{ type: "open_url", url, steps: [{ ...login, contact: "@bot" }] }], "")).toBeNull();
+  });
   it("lets a Mini App address run with no bot anywhere, which is the point of typing one", () => {
     expect(stepNeedingBot([{ type: "open_mini_app_url", url } as CustomAction], "")).toBeNull();
   });

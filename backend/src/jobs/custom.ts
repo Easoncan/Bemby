@@ -1,4 +1,6 @@
 import { TelegramClient, Api, Logger, utils } from "telegram";
+import { createHash } from "node:crypto";
+import { sendTelegramWebLogin } from "./webTelegramLogin";
 import { LogLevel } from "telegram/extensions/Logger";
 import { StringSession } from "telegram/sessions";
 import type { TgProxy } from '../types';
@@ -692,10 +694,11 @@ export function stepNeedingBot(
       case "send_contact_message":
       case "join_group":
       case "subscribe_channel":
-      case "open_url":
       case "update_profile":
       case "delay":
         return false;
+      case "open_url":
+        return (a.steps ?? []).some((s) => s.type === "web_telegram_login" && !s.contact?.trim());
       default:
         return true;
     }
@@ -2817,6 +2820,19 @@ export async function runCustom(
 
                 const cf = await loadCheckinUrl(url, webProxyUrl, {
                   webSteps,
+                  ...(webSteps.some((s) => s.type === "web_telegram_login") ? {
+                    profileScope: createHash("sha256").update(sessionString).digest("hex"),
+                  } : {}),
+                  signal,
+                  sendTelegramLogin: async (request) => {
+                    if (signal?.aborted) throw new Error("Job cancelled");
+                    const contact = request.contact?.trim() || botUsername.trim();
+                    if (!contact) throw new Error("No Telegram login bot configured");
+                    const entity = await resolvePeerTarget(client, contact);
+                    if (!(entity instanceof Api.User) || !entity.bot)
+                      throw new Error("Telegram web login must target a bot");
+                    await sendTelegramWebLogin(client, entity, request, signal);
+                  },
                   maxWaitMs: budgetLeft,
                   screenshot: true,
                   proxyCandidates: candidates,

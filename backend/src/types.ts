@@ -238,7 +238,7 @@ export type CustomAction =
   | {
       // Open a plain web page in the installed browser, passing any Cloudflare challenge,
       // and drive it with the sub-steps below. Nothing about this action goes through
-      // Telegram: the URL is opened directly.
+      // Telegram unless a web_telegram_login sub-step explicitly requests it.
       type: "open_url";
       url: string;
       /** Sub-steps run on the page once it is up, in order. */
@@ -279,6 +279,24 @@ export type CustomAction =
  * checkbox), or one painted on a canvas, none of which any selector can number.
  */
 export type WebStep =
+  | {
+      /** Read a login command, confirm it through this account's bot, and await the page. */
+      type: "web_telegram_login";
+      /** Element containing the command, e.g. code. Supports Playwright CSS selectors. */
+      selector: string;
+      /** Control to start login if the command is not visible yet. */
+      loginSelector?: string;
+      /** Visible element proving that the page is authenticated. Also skips repeat login. */
+      successSelector: string;
+      /** Bot to receive the command. Blank uses the job's target bot. */
+      contact?: string;
+      /** Only this command is extracted from the page. Defaults to /login. */
+      commandPrefix?: string;
+      /** Exact callback button on a new bot reply; blank skips bot-side confirmation. */
+      confirmButton?: string;
+      /** Total time for this login, including Telegram confirmation. Defaults to 60s. */
+      waitMs?: number;
+    }
   | {
       /** Type text into a field named by a CSS selector. */
       type: "web_input";

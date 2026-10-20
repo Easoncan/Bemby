@@ -13,6 +13,7 @@ import {
   type ProxyCandidate,
 } from "../tg/proxyProviders";
 import type { WebStep, WebStepLog } from "../types";
+import { runTelegramWebLogin, type TelegramLoginSender } from "./webTelegramLogin";
 
 // Completes a checkin that hands back a URL behind Cloudflare's "I am not a bot"
 // (managed challenge / Turnstile). CloakBrowser -- a Chromium whose fingerprint is patched
@@ -210,6 +211,10 @@ export function cfRefusedFor(state: CfRunState, host: string): Set<string> {
 }
 
 export type LoadOptions = {
+  /** Isolate authenticated website cookies from other Telegram accounts. */
+  profileScope?: string;
+  sendTelegramLogin?: TelegramLoginSender;
+  signal?: AbortSignal;
   /**
    * The URL is a signed Telegram Mini App URL: stub the webview bridge the app
    * expects, and press its checkin control once the page is up.
@@ -409,8 +414,9 @@ async function probeExitGeo(
 async function launchAlignedBrowser(
   proxyUrl: string | undefined,
   deadline: number,
+  profileScope?: string,
 ): Promise<LaunchedBrowser> {
-  const launched = await launchCfBrowser(proxyUrl);
+  const launched = await launchCfBrowser(proxyUrl, { profileScope });
   if (launched.geo) return launched;
 
   const geo = await probeExitGeo(launched.page, launched.key, deadline);
@@ -422,7 +428,7 @@ async function launchAlignedBrowser(
   // be refused, which the keyed build answers by quitting during startup. The seat is
   // already free locally; this is purely to let the far side catch up.
   await sleep(cfTuning().relaunchSettleMs, deadline);
-  return launchCfBrowser(proxyUrl);
+  return launchCfBrowser(proxyUrl, { profileScope });
 }
 
 /**
@@ -1889,6 +1895,8 @@ async function typeInto(page: Page, selector: string, text: string): Promise<boo
 }
 
 export type WebStepHooks = {
+  sendTelegramLogin?: TelegramLoginSender;
+  signal?: AbortSignal;
   /**
    * Hands a screenshot and a prompt to the vision model and returns its reply. Supplied by
    * the caller so the browser side stays clear of AI credentials and settings.
@@ -1934,6 +1942,10 @@ export async function runWebSteps(
 
     try {
       switch (step.type) {
+        case "web_telegram_login": {
+          log.outcome = await runTelegramWebLogin(page, step, deadline, hooks.sendTelegramLogin, hooks.signal);
+          break;
+        }
         case "web_button": {
           const selector = step.selector.trim();
           if (!selector) throw new Error("no CSS selector given");
@@ -2169,6 +2181,8 @@ export async function runWebSteps(
 /** What the step is trying to do, for the log line. */
 function describeWebStep(step: WebStep): string {
   switch (step.type) {
+    case "web_telegram_login":
+      return `Telegram web login${step.contact?.trim() ? ` via ${step.contact.trim()}` : ""}`;
     case "web_button":
       return `Press \`${step.selector}\``;
     case "web_input":
@@ -2567,7 +2581,7 @@ async function attemptLoad(
   try {
     // The clock and language of the exit are launch flags, so this settles them before
     // anything on the target is loaded
-    launched = await launchAlignedBrowser(proxyUrl, budgetDeadline);
+    launched = await launchAlignedBrowser(proxyUrl, budgetDeadline, opts.profileScope);
     launchOk = true;
     browserTier = launched.tier;
     const page = launched.page;
@@ -2694,6 +2708,8 @@ async function attemptLoad(
     if (opts.webSteps?.length && solved) {
       const run = await runWebSteps(page, opts.webSteps, budgetDeadline, {
         aiLocate: opts.aiLocate,
+        sendTelegramLogin: opts.sendTelegramLogin,
+        signal: opts.signal,
       });
       webSteps = run.logs;
       webFailure = run.failure;

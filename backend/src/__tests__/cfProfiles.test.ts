@@ -11,7 +11,7 @@ vi.mock("../db/database", () => ({
   db: { prepare: () => ({ get: () => undefined, run: () => {}, all: () => [] }) },
 }));
 
-import { cfProfileCount, clearCfProfiles } from "../jobs/cfBrowser";
+import { cfProfileCount, clearCfProfiles, cfProfileKey } from "../jobs/cfBrowser";
 
 const root = mkdtempSync(path.join(os.tmpdir(), "cfprofiles-"));
 const profiles = path.join(root, "cf-profiles");
@@ -35,6 +35,14 @@ function makeProfile(name: string) {
   writeFileSync(path.join(dir, "SingletonLock"), "");
   return dir;
 }
+
+it("isolates authenticated profiles by account and exit while preserving legacy profiles", () => {
+  expect(cfProfileKey("direct")).toBe("direct");
+  expect(cfProfileKey("direct", "account-a")).toBe(cfProfileKey("direct", "account-a"));
+  expect(cfProfileKey("direct", "account-a")).not.toBe(cfProfileKey("direct", "account-b"));
+  expect(cfProfileKey("direct", "account-a")).not.toBe(cfProfileKey("proxy", "account-a"));
+  expect(cfProfileKey("direct", "account-a")).not.toContain("account-a");
+});
 
 describe("clearCfProfiles", () => {
   it("removes every profile and says how many went", () => {

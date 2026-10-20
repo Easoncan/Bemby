@@ -14,12 +14,18 @@ export type WebStepForm = {
   waitMs: number;
   scrollX: number;
   scrollY: number;
+  loginSelector: string;
+  successSelector: string;
+  contact: string;
+  commandPrefix: string;
+  confirmButton: string;
 };
 
 /** Order the editor offers them in: the selector steps first, then waits, then the AI ones. */
 export const WEB_STEP_TYPES: WebStepType[] = [
   "web_input",
   "web_button",
+  "web_telegram_login",
   "web_wait_element",
   "web_delay",
   "web_scroll",
@@ -45,12 +51,28 @@ export function defaultWebStep(): WebStepForm {
     waitMs: 3000,
     scrollX: 0,
     scrollY: 500,
+    loginSelector: "",
+    successSelector: "",
+    contact: "",
+    commandPrefix: "/login",
+    confirmButton: "",
   };
 }
 
 /** Drops the fields the chosen type does not use, so the saved config stays readable. */
 export function webStepToConfig(s: WebStepForm): WebStep {
   switch (s.type) {
+    case "web_telegram_login":
+      return {
+        type: s.type,
+        selector: s.selector.trim(),
+        successSelector: s.successSelector.trim(),
+        ...(s.loginSelector.trim() ? { loginSelector: s.loginSelector.trim() } : {}),
+        ...(s.contact.trim() ? { contact: s.contact.trim() } : {}),
+        ...(s.commandPrefix.trim() ? { commandPrefix: s.commandPrefix.trim() } : {}),
+        ...(s.confirmButton.trim() ? { confirmButton: s.confirmButton.trim() } : {}),
+        waitMs: s.waitMs,
+      };
     case "web_input":
       return { type: "web_input", selector: s.selector.trim(), text: s.text };
     case "web_button":
@@ -92,6 +114,13 @@ export function webStepsToConfig(steps: WebStepForm[]): WebStep[] {
 export function webStepFromConfig(s: WebStep): WebStepForm {
   const base = defaultWebStep();
   switch (s.type) {
+    case "web_telegram_login":
+      return {
+        ...base, type: s.type, selector: s.selector,
+        loginSelector: s.loginSelector ?? "", successSelector: s.successSelector,
+        contact: s.contact ?? "", commandPrefix: s.commandPrefix ?? "/login",
+        confirmButton: s.confirmButton ?? "", waitMs: s.waitMs ?? 60_000,
+      };
     case "web_input":
       return { ...base, type: s.type, selector: s.selector, text: s.text };
     case "web_button":

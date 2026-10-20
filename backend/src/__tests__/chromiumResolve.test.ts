@@ -16,7 +16,9 @@ let cf: typeof import("../jobs/cloudflare");
 
 /** Lays down a CloakBrowser cache entry and returns the executable path. */
 function fakeDownload(version: string, pro = false): string {
-  const exe = path.join(dir, "cloakbrowser", `chromium-${version}${pro ? "-pro" : ""}`, "chrome");
+  const executable = process.platform === "darwin" ? "Chromium.app/Contents/MacOS/Chromium"
+    : process.platform === "win32" ? "chrome.exe" : "chrome";
+  const exe = path.join(dir, "cloakbrowser", `chromium-${version}${pro ? "-pro" : ""}`, executable);
   mkdirSync(path.dirname(exe), { recursive: true });
   writeFileSync(exe, "");
   return exe;

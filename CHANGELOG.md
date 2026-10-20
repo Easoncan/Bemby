@@ -4,6 +4,14 @@ All notable changes to Bemby are documented here.
 
 ---
 
+## v1.0.6
+
+新增网页 Telegram 登录步骤：从配置的网页元素读取登录命令，由任务关联账号发送给指定机器人，可精确点击本次新回复中的确认按钮，并等待登录后的页面元素出现。已登录时复用会话，网页 Cookie 按 Telegram 账号与出口隔离。配置界面提供机器人、命令、登入按钮、确认按钮和成功元素设置；无需 AI 或剪贴板即可完成这只猫用户中心的登录签到。
+
+Added a Telegram web login page step: read a configured login command, send it using the job's Telegram account, optionally confirm an exact button on a fresh bot reply, and wait for the authenticated page. Existing sessions are reused, with cookies isolated by account and exit. The editor exposes the bot, command, login control, confirmation button and authenticated element. Supports the ZZMed user center without AI or clipboard access.
+
+---
+
 ## v1.0.5
 
 飞书卡片正文收紧行距：任务名称、类型、时间、结果四行改为同一文本块内的连续换行，去掉元素之间被飞书自动插入的空隙，四行紧贴显示、更像一段信息。详情段落不变。

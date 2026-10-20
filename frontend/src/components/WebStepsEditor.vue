@@ -8,7 +8,7 @@
     <div v-for="(s, i) in steps" :key="i" class="web-step-card">
       <div class="web-step-header">
         <span class="web-step-num">{{ i + 1 }}</span>
-        <select v-model="s.type" class="form-select web-step-type">
+        <select v-model="s.type" class="form-select web-step-type" @change="onTypeChange(s)">
           <option
             v-for="ty in WEB_STEP_TYPES"
             :key="ty"
@@ -45,7 +45,7 @@
       </div>
 
       <!-- CSS selector: every type but the AI ones and the plain delay -->
-      <div v-if="s.type === 'web_input' || s.type === 'web_button' || s.type === 'web_wait_element'">
+      <div v-if="s.type === 'web_input' || s.type === 'web_button' || s.type === 'web_wait_element' || s.type === 'web_telegram_login'">
         <label class="form-label">{{ t("jobs.web.labelSelector") }}</label>
         <input
           v-model.trim="s.selector"
@@ -55,6 +55,32 @@
         <div style="font-size: 11px; color: #aaa; margin-top: 3px">
           {{ t("jobs.web.selectorHint") }}
         </div>
+      </div>
+
+      <div v-if="s.type === 'web_telegram_login'" class="telegram-login-fields">
+        <div class="form-group">
+          <label class="form-label">{{ t('jobs.web.loginContact') }}</label>
+          <input v-model.trim="s.contact" class="form-input" placeholder="@zzmeb_bot" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ t('jobs.web.loginTrigger') }}</label>
+          <input v-model.trim="s.loginSelector" class="form-input" placeholder='button:has-text("登入")' />
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ t('jobs.web.loginSuccess') }}</label>
+          <input v-model.trim="s.successSelector" class="form-input" placeholder=".web-account-header" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">{{ t('jobs.web.loginCommand') }}</label>
+            <input v-model.trim="s.commandPrefix" class="form-input" placeholder="/login" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('jobs.web.loginConfirm') }}</label>
+            <input v-model.trim="s.confirmButton" class="form-input" :placeholder="t('jobs.web.loginConfirmPlaceholder')" />
+          </div>
+        </div>
+        <div style="font-size: 11px; color: #aaa">{{ t('jobs.web.loginHint') }}</div>
       </div>
 
       <div v-if="s.type === 'web_input'" style="margin-top: 8px">
@@ -69,14 +95,14 @@
         </div>
       </div>
 
-      <div v-if="s.type === 'web_delay' || s.type === 'web_wait_element'" style="margin-top: 8px">
+      <div v-if="s.type === 'web_delay' || s.type === 'web_wait_element' || s.type === 'web_telegram_login'" style="margin-top: 8px">
         <label class="form-label">{{
           s.type === "web_delay" ? t("jobs.web.labelDelay") : t("jobs.web.labelTimeout")
         }}</label>
         <input v-model.number="s.waitMs" class="form-input" type="number" min="0" step="1000" />
         <div style="font-size: 11px; color: #aaa; margin-top: 3px">
           {{
-            s.type === "web_delay" ? t("jobs.web.delayHint") : t("jobs.web.timeoutHint")
+            s.type === "web_delay" ? t("jobs.web.delayHint") : s.type === "web_telegram_login" ? t("jobs.web.loginTimeoutHint") : t("jobs.web.timeoutHint")
           }}
         </div>
       </div>
@@ -158,6 +184,10 @@ function hintPlaceholder(type: WebStepType): string {
 
 function add() {
   props.steps.push(defaultWebStep());
+}
+
+function onTypeChange(step: WebStepForm) {
+  if (step.type === "web_telegram_login") step.waitMs = 60_000;
 }
 
 function remove(i: number) {

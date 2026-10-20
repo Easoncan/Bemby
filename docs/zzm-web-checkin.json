@@ -1,0 +1,38 @@
+{
+  "maxRetries": 1,
+  "actions": [
+    {
+      "type": "open_url",
+      "url": "https://user.zzm.li/",
+      "maxWaitMs": 120000,
+      "maxRetries": 1,
+      "tryAllProxies": false,
+      "successContains": "今日已签到",
+      "steps": [
+        {
+          "type": "web_telegram_login",
+          "selector": ".web-login-command code",
+          "loginSelector": ".web-login-telegram-button",
+          "successSelector": ".web-account-header",
+          "contact": "zzmeb_bot",
+          "commandPrefix": "/login",
+          "confirmButton": "确认登录",
+          "waitMs": 60000
+        },
+        {
+          "type": "web_wait_element",
+          "selector": ".web-content .grid.grid-cols-2 button.h-11.rounded-2xl",
+          "waitMs": 15000
+        },
+        {
+          "type": "web_button",
+          "selector": ".web-content .grid.grid-cols-2 button.h-11.rounded-2xl"
+        },
+        {
+          "type": "web_delay",
+          "waitMs": 2500
+        }
+      ]
+    }
+  ]
+}
